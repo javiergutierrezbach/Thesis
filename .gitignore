@@ -1,0 +1,30 @@
+**/2D_docking_env/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Envs
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+
+# Logs/data
+*.log
+*.pt
+*.pth
+*.onnx
+*.npz
+*.npy
+
+# Build/packaging
+build/
+dist/
+*.egg-info/
