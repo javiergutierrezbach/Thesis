@@ -1,0 +1,39 @@
+Training initial dynamic: 
+Total training time for initial dynamic 0:0
+
+Using L-infinity norm
+
+Lipschitz bound for dynamic: tensor(2.0415, grad_fn=<MulBackward0>)
+
+Max error for dynamic: tensor(1.9073e-06)
+
+Assumed lip for true dynamic: 2.1
+
+Spacing for grid sampling: 0.17
+
+Error on dynamic bounded by: tensor(0.3520, grad_fn=<AddBackward0>)
+Total training time for model index 0:1885
+Total verification time for verification index 0:564
+Number of verification counterexamples: 4
+Number of failed cases: 0
+Verification counterexamples: [[[-1.18, -0.76], [0.0, 1.0], [-0.11, 0.0], [-0.22, -0.11]], [[-1.18, -0.76], [0.0, 1.0], [0.11, 0.22], [0.11, 0.22]], [[-0.35, 0.35], [-0.76, -0.35], [-0.11, 0.0], [-0.11, 0.0]], [[-0.35, 0.35], [-0.76, -0.35], [-0.11, 0.0], [0.0, 0.11]]]
+Total training time for model index 1:573
+Total training time for verification index 1:535
+Number of verification counterexamples: 1
+Number of failed cases: 0
+Verification counterexamples: [[[0.76, 1.17], [0.0, 1.0], [-0.11, 0.0], [-0.11, 0.0]]]
+Total training time for model index 2:182
+Total training time for verification index 2:516
+Number of verification counterexamples: 2
+Number of failed cases: 0
+Verification counterexamples: [[[0.76, 1.17], [0.0, 1.0], [-0.11, 0.0], [-0.11, 0.0]], [[0.76, 1.17], [0.0, 1.0], [0.0, 0.11], [0.11, 0.22]]]
+Total training time for model index 3:278
+Total training time for verification index 3:15792
+Number of verification counterexamples: 9
+Number of failed cases: 0
+Verification counterexamples: [[[0.35, 0.76], [-1.0, 0.0], [0.11, 0.22], [0.0, 0.11]], [[-1.59, -1.18], [-1.0, 0.0], [-0.22, -0.11], [-0.22, -0.11]], [[-1.59, -1.18], [-1.0, 0.0], [-0.11, 0.0], [-0.22, -0.11]], [[-1.59, -1.18], [-1.0, 0.0], [0.11, 0.22], [0.11, 0.22]], [[-1.59, -1.18], [0.0, 1.0], [0.11, 0.22], [0.11, 0.22]], [[-1.18, -0.76], [-2.0, -1.0], [-0.11, 0.0], [-0.11, 0.0]], [[-1.18, -0.76], [-1.0, 0.0], [-0.11, 0.0], [-0.22, -0.11]], [[-1.18, -0.76], [-1.0, 0.0], [-0.11, 0.0], [-0.11, 0.0]], [[-1.18, -0.76], [0.0, 1.0], [0.11, 0.22], [0.11, 0.22]]]
+Total training time for model index 4:5617
+Total training time for verification index 4:11902
+Number of verification counterexamples: 0
+Number of failed cases: 0
+Verification counterexamples: []

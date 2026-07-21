@@ -17,18 +17,18 @@ def prepare_data(num_points = 1000000, val_split = 0.1, batch_size = 100, max_tr
         # Training
 
         p = torch.empty((
-                num_points, 2), dtype=torch.float64).uniform_(-1.25, 1.25)
+                num_points, 2), dtype=torch.float32).uniform_(-0.21, 0.21)
         
         theta = torch.empty((
-                num_points, 1), dtype=torch.float64).uniform_(-0.65 * np.pi, 0.65 * np.pi)
+                num_points, 1), dtype=torch.float32).uniform_(-0.21 * np.pi, 0.21 * np.pi)
         
         v = torch.empty((
-                num_points, 2), dtype=torch.float64).uniform_(-2.0, 2.0)
+                num_points, 2), dtype=torch.float32).uniform_(-0.42, 0.42)
         
         omega = torch.empty((
-                num_points, 1), dtype=torch.float64).uniform_(-1.2, 1.2)
+                num_points, 1), dtype=torch.float32).uniform_(-0.42, 0.42)
         
-        u = torch.empty((num_points, 2), dtype=torch.float64).uniform_(0, 16)
+        u = torch.empty((num_points, 2), dtype=torch.float32).uniform_(0, 6.2)
 
         x = torch.cat((p, theta, v, omega, u), 1)
         
@@ -39,18 +39,18 @@ def prepare_data(num_points = 1000000, val_split = 0.1, batch_size = 100, max_tr
         # Validation
 
         p = torch.empty((
-                num_points // 10, 2), dtype=torch.float64).uniform_(-1.25, 1.25)
+                num_points // 10, 2), dtype=torch.float32).uniform_(-0.21, 0.21)
         
         theta = torch.empty((
-                num_points // 10, 1), dtype=torch.float64).uniform_(-0.65 * np.pi, 0.65 * np.pi)
+                num_points // 10, 1), dtype=torch.float32).uniform_(-0.21 * np.pi, 0.21 * np.pi)
         
         v = torch.empty((
-                num_points // 10, 2), dtype=torch.float64).uniform_(-2.0, 2.0)
+                num_points // 10, 2), dtype=torch.float32).uniform_(-0.42, 0.42)
         
         omega = torch.empty((
-                num_points // 10, 1), dtype=torch.float64).uniform_(-1.2, 1.2)
+                num_points // 10, 1), dtype=torch.float32).uniform_(-0.42, 0.42)
         
-        u = torch.empty((num_points // 10, 2), dtype=torch.float64).uniform_(0,16)
+        u = torch.empty((num_points // 10, 2), dtype=torch.float32).uniform_(0,6.2)
 
         x = torch.cat((p, theta, v, omega, u), 1)
         
@@ -60,7 +60,7 @@ def prepare_data(num_points = 1000000, val_split = 0.1, batch_size = 100, max_tr
 
         return x_train, x_val
 
-def quad_next_state_batch(x: torch.Tensor, dt: float = 0.05) -> torch.Tensor:
+def quad_next_state_batch(x: torch.Tensor, dt: float = 0.01) -> torch.Tensor:
     """
     Vectorized next state computation using Euler integration.
     x: (batch, 8) -> [px, pz, theta, vx, vz, omega, u1, u2]
@@ -169,9 +169,9 @@ def sample_train_data(out_file, out_val_file):
   
 
     num_points = 1000000
-    dim = 2
+    dim = 6
 
-    x_train, x_val = prepare_data(num_points, dim)
+    x_train, x_val = prepare_data(num_points)
 
     outputs_train = quad_next_state_batch(x_train)
 

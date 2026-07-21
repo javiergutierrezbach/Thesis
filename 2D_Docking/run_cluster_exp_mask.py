@@ -1,4 +1,4 @@
-from training_exp_mask import train_model, retrain_model
+from training_exp_mask import train_model, retrain_model, TwoDimDocking
 from queries_mask import safe_descent_cond_check
 import torch
 from generate_combined_model_torch import combined_model
@@ -14,6 +14,9 @@ from train_dynamics import train_model as train_dynamic
 if __name__ == "__main__":
     pos_limit = 2
     safe_pos = pos_limit - 1
+    two_dim_docking = TwoDimDocking(4,4,0.5)
+    vel_limit = two_dim_docking.gen_vel_limit(torch.Tensor([pos_limit]), torch.Tensor([pos_limit]))[0].numpy() + 0.01
+
 
     lip_loss = True
 
@@ -53,6 +56,7 @@ if __name__ == "__main__":
         os.mkdir(out_controller_data_folders)
         os.mkdir(out_comb_folders)
         os.mkdir(out_counterexample_folders)
+        os.mkdir(out_dynamic_folders)
         os.mkdir(out_dynamic_data_folders)
 
     cur_controller_data_file = out_controller_data_folders + controller_data_file + str(index) + ".pt"
@@ -122,7 +126,7 @@ if __name__ == "__main__":
 
     threshold = 0
     st_train_time = datetime.now()
-    train_model(safe_pos, pos_limit, 0.5, cur_controller_data_file, cur_controller_data_val_file, cur_model_file, cur_controller_file, threshold, initial_controller_file, cur_dynamic_file, lip_loss, descenteps=cert_eps * 1000)
+    train_model(safe_pos, pos_limit, vel_limit, cur_controller_data_file, cur_controller_data_val_file, cur_model_file, cur_controller_file, threshold, initial_controller_file, cur_dynamic_file, lip_loss, descenteps=1e-4)
     end_train_time = datetime.now()
     diff = end_train_time - st_train_time
     f = open(out_timing_counterexample_file, "a")
@@ -134,7 +138,7 @@ if __name__ == "__main__":
     combined_model(cur_model_file, cur_controller_file, cur_dynamic_file, cur_comb_file)
     single_model(cur_model_file, cur_model_onnx_file)
     st_ver_time = datetime.now()
-    ret, ret_ranges, failed = safe_descent_cond_check(cur_comb_file, cur_model_onnx_file, safe_pos = safe_pos, limit_pos = pos_limit, docking_pos = 0.35, vel_limit = 0.5, descenteps=cert_eps, safe_level=safe_level)
+    ret, ret_ranges, failed = safe_descent_cond_check(cur_comb_file, cur_model_onnx_file, safe_pos = safe_pos, limit_pos = pos_limit, docking_pos = 0.35, vel_limit = vel_limit, descenteps=cert_eps, safe_level=safe_level)
     end_ver_time = datetime.now()
     diff_ver_time = end_ver_time - st_ver_time
     f = open(out_timing_counterexample_file, "a")
@@ -222,7 +226,7 @@ if __name__ == "__main__":
         save_dynamic_data(cur_dynamic_data_file, next_dynamic_data_file)
 
         st_train_time = datetime.now()
-        retrain_model(index - 1, torch.Tensor(ret), torch.Tensor(ret_ranges), safe_pos, pos_limit, 0.5, cur_controller_data_file, next_controller_data_file, next_controller_data_val_file, cur_model_file, cur_controller_file, next_model_file, next_controller_file, next_dynamic_file, threshold, lip_loss, descenteps=cert_eps * 1000)
+        retrain_model(index - 1, torch.Tensor(ret), torch.Tensor(ret_ranges), safe_pos, pos_limit, vel_limit, cur_controller_data_file, next_controller_data_file, next_controller_data_val_file, cur_model_file, cur_controller_file, next_model_file, next_controller_file, next_dynamic_file, threshold, lip_loss, descenteps=1e-4)
         end_train_time = datetime.now()
         diff = end_train_time - st_train_time
         f = open(out_timing_counterexample_file, "a")
@@ -232,7 +236,7 @@ if __name__ == "__main__":
         combined_model(next_model_file, next_controller_file, next_dynamic_file, next_comb_file)
         single_model(next_model_file, next_model_onnx_file)
         st_ver_time = datetime.now()
-        ret, ret_ranges, failed = safe_descent_cond_check(next_comb_file, next_model_onnx_file, safe_pos = safe_pos, limit_pos = pos_limit, docking_pos = 0.35, vel_limit = 0.5, descenteps=cert_eps, safe_level=safe_level)
+        ret, ret_ranges, failed = safe_descent_cond_check(next_comb_file, next_model_onnx_file, safe_pos = safe_pos, limit_pos = pos_limit, docking_pos = 0.35, vel_limit = vel_limit, descenteps=cert_eps, safe_level=safe_level)
         end_ver_time = datetime.now()
         diff_ver_time = end_ver_time - st_ver_time
         f = open(out_timing_counterexample_file, "a")

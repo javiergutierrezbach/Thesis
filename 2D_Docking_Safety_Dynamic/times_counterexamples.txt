@@ -1,0 +1,34 @@
+Training initial dynamic: 
+Total training time for initial dynamic 0:0
+
+Using L-infinity norm
+
+Lipschitz bound for dynamic: tensor(2.0415, grad_fn=<MulBackward0>)
+
+Max error for dynamic: tensor(1.9073e-06)
+
+Assumed lip for true dynamic: 2.1
+
+Spacing for grid sampling: 0.17
+
+Error on dynamic bounded by: tensor(0.3520, grad_fn=<AddBackward0>)
+Total training time for model index 0:2101
+Total verification time for verification index 0:292
+Number of verification counterexamples: 3
+Number of failed cases: 0
+Verification counterexamples: [[[0.35, 0.76], [-1.0, 0.0], [-0.11, 0.0], [-0.11, 0.0]], [[0.35, 0.76], [-1.0, 0.0], [-0.11, 0.0], [0.0, 0.11]], [[-0.35, 0.35], [0.76, 1.17], [0.0, 0.11], [0.11, 0.22]]]
+Total training time for model index 1:347
+Total training time for verification index 1:290
+Number of verification counterexamples: 6
+Number of failed cases: 0
+Verification counterexamples: [[[-0.35, 0.35], [0.35, 0.76], [-0.11, 0.0], [-0.22, -0.11]], [[0.76, 1.17], [0.0, 1.0], [-0.22, -0.11], [-0.22, -0.11]], [[0.76, 1.17], [0.0, 1.0], [-0.11, 0.0], [-0.22, -0.11]], [[0.76, 1.17], [1.0, 2.0], [-0.22, -0.11], [-0.22, -0.11]], [[0.76, 1.17], [1.0, 2.0], [-0.11, 0.0], [-0.22, -0.11]], [[-1.18, -0.76], [0.0, 1.0], [-0.22, -0.11], [-0.22, -0.11]]]
+Total training time for model index 2:158
+Total training time for verification index 2:279
+Number of verification counterexamples: 2
+Number of failed cases: 0
+Verification counterexamples: [[[0.76, 1.17], [0.0, 1.0], [-0.22, -0.11], [-0.22, -0.11]], [[-0.35, 0.35], [0.76, 1.17], [0.0, 0.11], [0.11, 0.22]]]
+Total training time for model index 3:234
+Total training time for verification index 3:299
+Number of verification counterexamples: 0
+Number of failed cases: 0
+Verification counterexamples: []

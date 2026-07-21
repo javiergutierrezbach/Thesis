@@ -54,13 +54,13 @@ def combined_model(file_1,file_2,file_3, output_file):
     combined_network = CombinedNetwork(controller,V, dynamic)
 
     # Test the combined network
-    input_data_one = torch.randn(1, 2, dtype=torch.float64)  
-    input_data_two = torch.randn(1, 2, dtype=torch.float64)
-    input_data_three = torch.randn(1, 3, dtype=torch.float64)
+    input_data_one = torch.randn(1, 2, dtype=torch.float32)  
+    input_data_two = torch.randn(1, 2, dtype=torch.float32)
+    input_data_three = torch.randn(1, 3, dtype=torch.float32)
 
-    input_data_one = torch.tensor([[1,1]], dtype=torch.float64)
-    input_data_two = torch.tensor([[1,1]], dtype=torch.float64)
-    input_data_three = torch.tensor([[1,1,1]], dtype=torch.float64)
+    input_data_one = torch.tensor([[1,1]], dtype=torch.float32)
+    input_data_two = torch.tensor([[1,1]], dtype=torch.float32)
+    input_data_three = torch.tensor([[1,1,1]], dtype=torch.float32)
 
     print(input_data_one)
     print(input_data_two)
@@ -70,9 +70,9 @@ def combined_model(file_1,file_2,file_3, output_file):
     print(output_twoB)
     print(output_three)
 
-    x = torch.randn(1,2, dtype=torch.float64,requires_grad=True)
-    y = torch.randn(1,2, dtype=torch.float64,requires_grad=True)
-    z = torch.randn(1,3, dtype=torch.float64,requires_grad=True)
+    x = torch.randn(1,2, dtype=torch.float32,requires_grad=True)
+    y = torch.randn(1,2, dtype=torch.float32,requires_grad=True)
+    z = torch.randn(1,3, dtype=torch.float32,requires_grad=True)
  
     torch.onnx.export(combined_network,(x,y,z),output_file,export_params=True,opset_version=10,do_constant_folding=True,input_names = ['input_1','input_2', 'input_3'],output_names = ['output_1','output_2A','output_2B', 'output_3'])
 
@@ -116,11 +116,11 @@ def combined_model_real(file_1,file_2, output_file):
     combined_network = CombinedNetworkReal(controller,V)
 
     # Test the combined network
-    input_data_one = torch.randn(1, 2, dtype=torch.float64)  
-    input_data_two = torch.randn(1, 2, dtype=torch.float64)
+    input_data_one = torch.randn(1, 2, dtype=torch.float32)  
+    input_data_two = torch.randn(1, 2, dtype=torch.float32)
 
-    input_data_one = torch.tensor([[1,1]], dtype=torch.float64)
-    input_data_two = torch.tensor([[1,1]], dtype=torch.float64)
+    input_data_one = torch.tensor([[1,1]], dtype=torch.float32)
+    input_data_two = torch.tensor([[1,1]], dtype=torch.float32)
 
     print(input_data_one)
     print(input_data_two)
@@ -129,8 +129,8 @@ def combined_model_real(file_1,file_2, output_file):
     print(output_two)
     print(output_twoB)
 
-    x = torch.randn(1,2, dtype=torch.float64,requires_grad=True)
-    y = torch.randn(1,2, dtype=torch.float64,requires_grad=True)
+    x = torch.randn(1,2, dtype=torch.float32,requires_grad=True)
+    y = torch.randn(1,2, dtype=torch.float32,requires_grad=True)
  
     torch.onnx.export(combined_network,(x,y),output_file,export_params=True,opset_version=10,do_constant_folding=True,input_names = ['input_1','input_2'],output_names = ['output_1','output_2A','output_2B'])
 

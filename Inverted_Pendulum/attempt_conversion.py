@@ -15,7 +15,7 @@ class LearnedController(nn.Module):
             nn.Linear(dim, dim),  # Hidden layer (matches Dense_1)
             nn.ReLU(),           # Activation
             nn.Linear(dim, 1)   # Output layer (matches Dense_2)
-        ).double()
+        )
     def forward(self, x):
         #x = self.flatten(x)
         logits = self.net(x)

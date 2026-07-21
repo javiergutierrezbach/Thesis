@@ -138,7 +138,7 @@ class Queries:
 
         e33 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e33.addAddend(1.0, px1)
-        e33.setScalar(-unsafe_threshold_pos+0.1)
+        e33.setScalar(-unsafe_threshold_pos+0.02)
 
         # unsafe right
 
@@ -156,7 +156,7 @@ class Queries:
 
         e43 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e43.addAddend(1.0, px1)
-        e43.setScalar(unsafe_threshold_pos-0.1)
+        e43.setScalar(unsafe_threshold_pos-0.02)
 
         # unsafe bottom
 
@@ -174,7 +174,7 @@ class Queries:
 
         e53 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e53.addAddend(1.0, pz1)
-        e53.setScalar(-unsafe_threshold_pos+0.1)
+        e53.setScalar(-unsafe_threshold_pos+0.02)
 
         # unsafe top
 
@@ -192,7 +192,7 @@ class Queries:
 
         e63 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e63.addAddend(1.0, pz1)
-        e63.setScalar(unsafe_threshold_pos-0.1)
+        e63.setScalar(unsafe_threshold_pos-0.02)
 
         # unsafe tilt left
 
@@ -210,7 +210,7 @@ class Queries:
 
         e73 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e73.addAddend(1.0, th1)
-        e73.setScalar(-unsafe_threshold_th+0.1)
+        e73.setScalar(-unsafe_threshold_th+(0.02*math.pi))
 
         # unsafe tilt right
 
@@ -228,7 +228,7 @@ class Queries:
 
         e83 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e83.addAddend(1.0, th1)
-        e83.setScalar(unsafe_threshold_th-0.1)
+        e83.setScalar(unsafe_threshold_th-(0.02*math.pi))
 
 
         # maps to either not decreasing or in unsafe region
@@ -244,100 +244,100 @@ class Queries:
          # initial state
         e90 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e90.addAddend(1.0, px0)
-        e90.setScalar(-0.1-1e-3)
+        e90.setScalar(-0.03-1e-4)
 
         e91 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e91.addAddend(1.0, pz0)
-        e91.setScalar(-0.1-1e-3)
+        e91.setScalar(-0.03-1e-4)
 
         e92 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e92.addAddend(1.0, px0)
-        e92.setScalar(0.1+1e-3)
+        e92.setScalar(0.03+1e-4)
 
         e93 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e93.addAddend(1.0, pz0)
-        e93.setScalar(0.1+1e-3)
+        e93.setScalar(0.03+1e-4)
 
         e94 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e94.addAddend(1.0, th0)
-        e94.setScalar(-0.1-1e-3)
+        e94.setScalar(-(0.04 * math.pi)-1e-4)
 
         e95 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e95.addAddend(1.0, th0)
-        e95.setScalar(0.1+1e-3)
+        e95.setScalar((0.04 * math.pi)+1e-4)
 
         e96 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e96.addAddend(1.0, vx0)
-        e96.setScalar(-0.2-1e-3)
+        e96.setScalar(-0.05-1e-4)
 
         e97 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e97.addAddend(1.0, vz0)
-        e97.setScalar(-0.2-1e-3)
+        e97.setScalar(-0.05-1e-4)
 
         e98 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e98.addAddend(1.0, vx0)
-        e98.setScalar(0.2+1e-3)
+        e98.setScalar(0.05+1e-4)
 
         e99 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e99.addAddend(1.0, vz0)
-        e99.setScalar(0.2+1e-3)
+        e99.setScalar(0.05+1e-4)
 
         e100 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e100.addAddend(1.0, omega0)
-        e100.setScalar(-0.2-1e-3)
+        e100.setScalar(-0.05-1e-4)
 
         e101 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e101.addAddend(1.0, omega0)
-        e101.setScalar(0.2+1e-3)
+        e101.setScalar(0.05+1e-4)
 
         # next state
         e110 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e110.addAddend(1.0, px1)
-        e110.setScalar(-0.1-1e-3)
+        e110.setScalar(-0.03-1e-4)
 
         e111 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e111.addAddend(1.0, pz1)
-        e111.setScalar(-0.1-1e-3)
+        e111.setScalar(-0.03-1e-4)
 
         e112 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e112.addAddend(1.0, px1)
-        e112.setScalar(0.1+1e-3)
+        e112.setScalar(0.03+1e-4)
 
         e113 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e113.addAddend(1.0, pz1)
-        e113.setScalar(0.1+1e-3)
+        e113.setScalar(0.03+1e-4)
 
         e114 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e114.addAddend(1.0, th1)
-        e114.setScalar(-0.1-1e-3)
+        e114.setScalar(-(0.04 * math.pi)-1e-4)
 
         e115 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e115.addAddend(1.0, th1)
-        e115.setScalar(0.1+1e-3)
+        e115.setScalar((0.04 * math.pi)+1e-4)
 
         e116 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e116.addAddend(1.0, vx1)
-        e116.setScalar(-0.2-1e-3)
+        e116.setScalar(-0.05-1e-4)
 
         e117 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e117.addAddend(1.0, vz1)
-        e117.setScalar(-0.2-1e-3)
+        e117.setScalar(-0.05-1e-4)
 
         e118 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e118.addAddend(1.0, vx1)
-        e118.setScalar(0.2+1e-3)
+        e118.setScalar(0.05+1e-4)
 
         e119 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e119.addAddend(1.0, vz1)
-        e119.setScalar(0.2+1e-3)
+        e119.setScalar(0.05+1e-4)
 
         e120 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e120.addAddend(1.0, omega1)
-        e120.setScalar(-0.2-1e-3)
+        e120.setScalar(-0.05-1e-4)
 
         e121 = MarabouUtils.Equation(MarabouCore.Equation.GE)
         e121.addAddend(1.0, omega1)
-        e121.setScalar(0.2+1e-3)
+        e121.setScalar(0.05+1e-4)
 
 
         network.addDisjunctionConstraint([[e90], [e91], [e92], [e93], [e94], [e95], [e96], [e97], [e98], [e99], [e100], [e101]])
@@ -573,126 +573,126 @@ class Queries:
             print("Failed in", diff.seconds, "seconds")
             return [-1]
     
-    def encode_piecewise_sin_bounds(self, network, th):
-        # Each segment: (coefficient, slope, breakpoint1, breakpoint2) for upper and lower
-        def add_segments(network, th, s):
-            k, slope1, bp1, slope2, bp2 = s
-            assert slope2 is None or bp2 is not None, "Both slope2 and bp2 must be provided or both must be None"
-            if slope2 is None and bp2 is None:
-                # delta = th - bp1
-                # relu_in = slope1 * (th - bp1)
-                # relu_out = max(0, slope1*(th - bp1))
-                delta = network.getNewVariable()
-                network.addEquality([delta, th], [1, -1], -bp1, False)
-                relu_in = network.getNewVariable()
-                network.addEquality([relu_in, delta], [1, -slope1], 0, False)
-                relu_out = network.getNewVariable()
-                network.addRelu(relu_in, relu_out)
-            else:
-                # delta1 = th - bp1
-                # t1 = slope1 * (th - bp1)
-                # t2 = slope2 * (th - bp2)
-                # min_t1_t2 = t1 + t2 - max(t1, t2)
-                # relu_out = max(0, min(t1, t2))
-                delta1 = network.getNewVariable()
-                network.addEquality([delta1, th], [1, -1], -bp1)
-                t1 = network.getNewVariable()
-                network.addEquality([t1, delta1], [1, -slope1], 0)
+    # def encode_piecewise_sin_bounds(self, network, th):
+    #     # Each segment: (coefficient, slope, breakpoint1, breakpoint2) for upper and lower
+    #     def add_segments(network, th, s):
+    #         k, slope1, bp1, slope2, bp2 = s
+    #         assert slope2 is None or bp2 is not None, "Both slope2 and bp2 must be provided or both must be None"
+    #         if slope2 is None and bp2 is None:
+    #             # delta = th - bp1
+    #             # relu_in = slope1 * (th - bp1)
+    #             # relu_out = max(0, slope1*(th - bp1))
+    #             delta = network.getNewVariable()
+    #             network.addEquality([delta, th], [1, -1], -bp1, False)
+    #             relu_in = network.getNewVariable()
+    #             network.addEquality([relu_in, delta], [1, -slope1], 0, False)
+    #             relu_out = network.getNewVariable()
+    #             network.addRelu(relu_in, relu_out)
+    #         else:
+    #             # delta1 = th - bp1
+    #             # t1 = slope1 * (th - bp1)
+    #             # t2 = slope2 * (th - bp2)
+    #             # min_t1_t2 = t1 + t2 - max(t1, t2)
+    #             # relu_out = max(0, min(t1, t2))
+    #             delta1 = network.getNewVariable()
+    #             network.addEquality([delta1, th], [1, -1], -bp1)
+    #             t1 = network.getNewVariable()
+    #             network.addEquality([t1, delta1], [1, -slope1], 0)
 
-                delta2 = network.getNewVariable()
-                network.addEquality([delta2, th], [1, -1], -bp2)
-                t2 = network.getNewVariable()
-                network.addEquality([t2, delta2], [1, -slope2], 0)
+    #             delta2 = network.getNewVariable()
+    #             network.addEquality([delta2, th], [1, -1], -bp2)
+    #             t2 = network.getNewVariable()
+    #             network.addEquality([t2, delta2], [1, -slope2], 0)
 
-                # min(a, b) = a + b - max(a, b)
-                neg_t1 = network.getNewVariable()
-                network.addEquality([neg_t1, t1], [1, 1], 0, False)
-                neg_t2 = network.getNewVariable()
-                network.addEquality([neg_t2, t2], [1, 1], 0, False)
-                neg_max_t1_t2 = network.getNewVariable()
-                network.addMaxConstraint(set([neg_t1, neg_t2]), neg_max_t1_t2)
-                min_t1_t2 = network.getNewVariable()
-                network.addEquality(
-                    [neg_max_t1_t2, min_t1_t2], [1, 1], 0, False)
-                # max_t1_t2 = network.getNewVariable()
-                # network.addMaxConstraint(set([t1, t2]), max_t1_t2)
-                # min_t1_t2 = network.getNewVariable()
-                # network.addEquality(
-                #     [min_t1_t2, t1, t2, max_t1_t2], [1, -1, -1, 1], 0)
-                relu_out = network.getNewVariable()
-                network.addRelu(min_t1_t2, relu_out)
+    #             # min(a, b) = a + b - max(a, b)
+    #             neg_t1 = network.getNewVariable()
+    #             network.addEquality([neg_t1, t1], [1, 1], 0, False)
+    #             neg_t2 = network.getNewVariable()
+    #             network.addEquality([neg_t2, t2], [1, 1], 0, False)
+    #             neg_max_t1_t2 = network.getNewVariable()
+    #             network.addMaxConstraint(set([neg_t1, neg_t2]), neg_max_t1_t2)
+    #             min_t1_t2 = network.getNewVariable()
+    #             network.addEquality(
+    #                 [neg_max_t1_t2, min_t1_t2], [1, 1], 0, False)
+    #             # max_t1_t2 = network.getNewVariable()
+    #             # network.addMaxConstraint(set([t1, t2]), max_t1_t2)
+    #             # min_t1_t2 = network.getNewVariable()
+    #             # network.addEquality(
+    #             #     [min_t1_t2, t1, t2, max_t1_t2], [1, -1, -1, 1], 0)
+    #             relu_out = network.getNewVariable()
+    #             network.addRelu(min_t1_t2, relu_out)
 
-            scaled = network.getNewVariable()
-            network.addEquality([scaled, relu_out], [1, -k], 0)
-            return scaled
+    #         scaled = network.getNewVariable()
+    #         network.addEquality([scaled, relu_out], [1, -k], 0)
+    #         return scaled
         
-        upper_segments = [
-            (-0.6442048028839462, -7.116027437521648, -
-             0.5594721551062094, None, None),
-            (-0.5307260203042105, 7.116027437521648, -
-             0.7, -6.579114308657342, -0.4074760119955604),
-            (-0.3962803744602469, 6.579114308657342, -
-             0.5594721551062094, -5.791890862570436, -0.2348208249887733),
-            (-0.2326558471540191, 5.791890862570436, -
-             0.4074760119955604, -4.2585660792555755, 0.0),
-            (1.2884353744753822e-5, 4.2585660792555755, -
-             0.2348208249887733, -4.669885975875376, 0.21413799077022405),
-            (0.21415087512293396, 4.669885975875376,
-             0.0, -4.645705852508769, 0.429390534032295),
-            (0.41835643466886857, 4.645705852508769,
-             0.21413799077022405, -5.39290695464878, 0.6148192848728751),
-            (0.5790807671191807, 5.39290695464878,
-             0.429390534032295, -11.739746473219743, 0.7),
-            (0.6442305715914358, 11.739746473219743,
-             0.6148192848728751, None, None),
-        ]
-        # upper_segments = [
-        #     (-0.6, -7.1, -0.6, None, None),
-        #     (-0.5, 7.1, -0.7, -6.6, -0.4),
-        #     (-0.4, 6.6, -0.6, -5.8, -0.2),
-        #     (-0.2, 5.8, -0.4, -4.3, 0.0),
-        #     (0.0, 4.3, -0.2, -4.7, 0.2),
-        #     (0.2, 4.7, 0.0, -4.6, 0.4),
-        #     (0.4, 4.6, 0.2, -5.4, 0.6),
-        #     (0.6, 5.4, 0.4, -11.7, 0.7),
-        #     (0.6, 11.7, 0.6, None, None),
-        # ]
+    #     upper_segments = [
+    #         (-0.6442048028839462, -7.116027437521648, -
+    #          0.5594721551062094, None, None),
+    #         (-0.5307260203042105, 7.116027437521648, -
+    #          0.7, -6.579114308657342, -0.4074760119955604),
+    #         (-0.3962803744602469, 6.579114308657342, -
+    #          0.5594721551062094, -5.791890862570436, -0.2348208249887733),
+    #         (-0.2326558471540191, 5.791890862570436, -
+    #          0.4074760119955604, -4.2585660792555755, 0.0),
+    #         (1.2884353744753822e-5, 4.2585660792555755, -
+    #          0.2348208249887733, -4.669885975875376, 0.21413799077022405),
+    #         (0.21415087512293396, 4.669885975875376,
+    #          0.0, -4.645705852508769, 0.429390534032295),
+    #         (0.41835643466886857, 4.645705852508769,
+    #          0.21413799077022405, -5.39290695464878, 0.6148192848728751),
+    #         (0.5790807671191807, 5.39290695464878,
+    #          0.429390534032295, -11.739746473219743, 0.7),
+    #         (0.6442305715914358, 11.739746473219743,
+    #          0.6148192848728751, None, None),
+    #     ]
+    #     # upper_segments = [
+    #     #     (-0.6, -7.1, -0.6, None, None),
+    #     #     (-0.5, 7.1, -0.7, -6.6, -0.4),
+    #     #     (-0.4, 6.6, -0.6, -5.8, -0.2),
+    #     #     (-0.2, 5.8, -0.4, -4.3, 0.0),
+    #     #     (0.0, 4.3, -0.2, -4.7, 0.2),
+    #     #     (0.2, 4.7, 0.0, -4.6, 0.4),
+    #     #     (0.4, 4.6, 0.2, -5.4, 0.6),
+    #     #     (0.6, 5.4, 0.4, -11.7, 0.7),
+    #     #     (0.6, 11.7, 0.6, None, None),
+    #     # ]
 
-        # Define segments for v_12 (lower bound of sin(th))
-        lower_segments = [
-            (-0.6442305715914358, -11.739746471639581, -
-             0.6148192848614098, None, None),
-            (-0.579080767110056, 11.739746471639581, -
-             0.7, -5.392906954380035, -0.4293905340115893),
-            (-0.4183564346504053, 5.392906954380035, -
-             0.6148192848614098, -4.645705852733989, -0.21413799075995357),
-            (-0.21415087511238962, 4.645705852733989, -
-             0.4293905340115893, -4.669885976099353, 0.0),
-            (-1.2884353744753822e-5, 4.669885976099353, -
-             0.21413799075995357, -4.258566079569611, 0.2348208249714571),
-            (0.23265584713717813, 4.258566079569611,
-             0.0, -5.791890862774022, 0.4074760119721753),
-            (0.3962803744387765, 5.791890862774022,
-             0.2348208249714571, -6.579114308316329, 0.5594721550907027),
-            (0.530726020291068, 6.579114308316329,
-             0.4074760119721753, -7.116027436736422, 0.7),
-            (0.6442048028839462, 7.116027436736422, 0.5594721550907027, None, None),
-        ]
+    #     # Define segments for v_12 (lower bound of sin(th))
+    #     lower_segments = [
+    #         (-0.6442305715914358, -11.739746471639581, -
+    #          0.6148192848614098, None, None),
+    #         (-0.579080767110056, 11.739746471639581, -
+    #          0.7, -5.392906954380035, -0.4293905340115893),
+    #         (-0.4183564346504053, 5.392906954380035, -
+    #          0.6148192848614098, -4.645705852733989, -0.21413799075995357),
+    #         (-0.21415087511238962, 4.645705852733989, -
+    #          0.4293905340115893, -4.669885976099353, 0.0),
+    #         (-1.2884353744753822e-5, 4.669885976099353, -
+    #          0.21413799075995357, -4.258566079569611, 0.2348208249714571),
+    #         (0.23265584713717813, 4.258566079569611,
+    #          0.0, -5.791890862774022, 0.4074760119721753),
+    #         (0.3962803744387765, 5.791890862774022,
+    #          0.2348208249714571, -6.579114308316329, 0.5594721550907027),
+    #         (0.530726020291068, 6.579114308316329,
+    #          0.4074760119721753, -7.116027436736422, 0.7),
+    #         (0.6442048028839462, 7.116027436736422, 0.5594721550907027, None, None),
+    #     ]
 
-        def apply_segments(segments):
-            outputs = []
-            for s in segments:
-                term = add_segments(network, th, s)
-                outputs.append(term)
-            result = network.getNewVariable()
-            network.addEquality([result] + outputs, [1] +
-                                [-1]*len(outputs), 0, False)
-            return result
+    #     def apply_segments(segments):
+    #         outputs = []
+    #         for s in segments:
+    #             term = add_segments(network, th, s)
+    #             outputs.append(term)
+    #         result = network.getNewVariable()
+    #         network.addEquality([result] + outputs, [1] +
+    #                             [-1]*len(outputs), 0, False)
+    #         return result
 
-        upper = apply_segments(upper_segments)
-        lower = apply_segments(lower_segments)
+    #     upper = apply_segments(upper_segments)
+    #     lower = apply_segments(lower_segments)
 
-        return upper, lower
+    #     return upper, lower
 
     '''
     def check_unsafe(self, vel, input, timeout):
@@ -802,9 +802,18 @@ class Queries:
         px0_d, pz0_d, th0_d, vx0_d, vz0_d, omega0_d, u1_d, u2_d = dyn_input[0], dyn_input[1], dyn_input[2], dyn_input[3], dyn_input[4], dyn_input[5], dyn_input[6], dyn_input[7]
 
 
-        # NN output: u = 2 * clip(action, -1, 1)
-        action1 = self.scale_clip(network, u1, 0, 8, scale=1.0)
-        action2 = self.scale_clip(network, u2, 0, 8, scale=1.0)
+        mass = 0.486 
+        gravity = 9.81
+        hover = mass * gravity / 2.0
+
+        u1_abs = network.getNewVariable()
+        u2_abs = network.getNewVariable()
+
+        network.addEquality([u1_abs, u1], [1, -1], hover, False)
+        network.addEquality([u2_abs, u2], [1, -1], hover, False)
+
+        action1 = self.scale_clip(network, u1_abs, 0, 6, scale=1.0)
+        action2 = self.scale_clip(network, u2_abs, 0, 6, scale=1.0)
 
         # Get sin(th) bounds via piecewise ReLU approximation (v_11 and v_12)
         #sin_upper, sin_lower = self.encode_piecewise_sin_bounds(network, th_0)
@@ -844,7 +853,7 @@ class Queries:
 
         d_px, d_pz, d_th, d_vx, d_vz, d_omega = encodeDifferences(network, [px1, pz1, th1, vx1, vz1, omega1], [px1_d, pz1_d, th1_d, vx1_d, vz1_d, omega1_d])
 
-        max_perturbation = 0
+        max_perturbation = 0.0
 
         network.setUpperBound(d_px, max_perturbation)
         network.setUpperBound(d_pz, max_perturbation)
@@ -860,7 +869,7 @@ class Queries:
 
         return px0, pz0, th0, vx0, vz0, omega0, px1, pz1, th1, vx1, vz1, omega1, action1, action2, init_val, out_val
 
-def safe_descent_cond_check(PATH_TO_ONNX, PATH_TO_CERT, limit_pos=1.2, safe_pos=1.0, docking_pos=0.1, docking_th=0.1, limit_th = 0.6*math.pi, safe_th=0.45*math.pi-0.1, limit_vel=1.5, limit_omega=0.9):
+def safe_descent_cond_check(PATH_TO_ONNX, PATH_TO_CERT, limit_pos=0.2, safe_pos=0.1, docking_pos=0.03, docking_th=0.04*math.pi, limit_th = 0.2*math.pi, safe_th=0.1*math.pi, limit_vel=0.4, limit_omega=0.4):
     vals = []
     failed_vals = []
     val_ranges = []

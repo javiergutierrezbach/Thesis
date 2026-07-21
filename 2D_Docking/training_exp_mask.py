@@ -54,11 +54,16 @@ class TwoDimDocking():
         self.st_pos = st_pos # 1
         self.unsafe_pos = unsafe_pos # 2
 
+    def gen_vel_limit(self, x, y):
+        dist = torch.sqrt(torch.pow(x,2) + torch.pow(y,2))
+        return torch.round(self.v0 + self.v1*dist,decimals=4)
+
     def goal_mask(self, x):
         goal_mask = abs(x[:, 1]) < 0.35
         goal_mask.logical_and_(abs(x[:,0]) < 0.35)
-        goal_mask.logical_and_(abs(x[:,1]) < self.vel_limit - 0.001)
-        goal_mask.logical_and_(abs(x[:,0]) < self.vel_limit - 0.001)
+        goal_mask.logical_and_(torch.sqrt(torch.pow(x[:,2],2) + torch.pow(x[:,3],2)) < self.gen_vel_limit(x[:,0], x[:,1]) - 0.0001)
+        # goal_mask.logical_and_(abs(x[:,1]) < self.vel_limit - 0.001)
+        # goal_mask.logical_and_(abs(x[:,0]) < self.vel_limit - 0.001)
         #goal_mask.logical_and(self.safe_mask(x))
         return goal_mask
     def nongoal_mask(self, x):
@@ -66,8 +71,9 @@ class TwoDimDocking():
         #nongoal_mask.logical_and_(~self.unsafe_mask(x))
         nongoal_mask = abs(x[:, 1]) >= 0.35
         nongoal_mask.logical_or_(abs(x[:,0]) >= 0.35)
-        nongoal_mask.logical_or_(abs(x[:,1]) >= self.vel_limit - 0.001)
-        nongoal_mask.logical_or_(abs(x[:,0]) >= self.vel_limit - 0.001)
+        nongoal_mask.logical_or_(torch.sqrt(torch.pow(x[:,2],2) + torch.pow(x[:,3],2)) >= self.gen_vel_limit(x[:,0], x[:,1]) - 0.0001)
+        # nongoal_mask.logical_or_(abs(x[:,1]) >= self.vel_limit - 0.001)
+        # nongoal_mask.logical_or_(abs(x[:,0]) >= self.vel_limit - 0.001)
         #goal_mask.logical_and(self.safe_mask(x))
         return nongoal_mask
         #return (~self.goal_mask(x))
@@ -87,8 +93,9 @@ class TwoDimDocking():
         #unsafe_mask = (abs(x[:,2]) + abs(x[:,3])) > (self.v0 + torch.max(abs(x[:,0]),abs(x[:,1])) * self.v1)
         unsafe_mask = abs(x[:,0]) >= self.unsafe_pos - 0.01
         unsafe_mask.logical_or_(abs(x[:,1]) >= self.unsafe_pos - 0.01)
-        unsafe_mask.logical_or_(abs(x[:,2]) >= self.vel_limit - 0.001)
-        unsafe_mask.logical_or_(abs(x[:,3]) >= self.vel_limit - 0.001)
+        unsafe_mask.logical_or_(torch.sqrt(torch.pow(x[:,2],2) + torch.pow(x[:,3],2)) >= self.gen_vel_limit(x[:,0], x[:,1]) - 0.0001)
+        # unsafe_mask.logical_or_(abs(x[:,2]) >= self.vel_limit - 0.001)
+        # unsafe_mask.logical_or_(abs(x[:,3]) >= self.vel_limit - 0.001)
         return unsafe_mask
     def safe_mask(self,x):
         safe_mask = abs(x[:,0]) <= self.st_pos
@@ -118,8 +125,9 @@ class TwoDimDocking():
     def unsafe_mask_init(self,x):
         unsafe_mask = abs(x[:,0]) > self.unsafe_pos
         unsafe_mask.logical_or_(abs(x[:,1]) > self.unsafe_pos)
-        unsafe_mask.logical_or_(abs(x[:,2]) > self.vel_limit)
-        unsafe_mask.logical_or_(abs(x[:,3]) > self.vel_limit)
+        unsafe_mask.logical_or_(torch.sqrt(torch.pow(x[:,2],2) + torch.pow(x[:,3],2)) >= self.gen_vel_limit(x[:,0], x[:,1]) + 0.0001)
+        # unsafe_mask.logical_or_(abs(x[:,2]) > self.vel_limit)
+        # unsafe_mask.logical_or_(abs(x[:,3]) > self.vel_limit)
         return unsafe_mask
 
 class Controller():
@@ -189,6 +197,8 @@ class SampleData(pl.LightningDataModule):
         self.ranges = []
         self.train_file_name = train_file_name
         self.val_file_name = val_file_name
+        self.rand_vel_upper = 1.0
+        self.save_file = "counterexamples/safes.pt"
 
         for _ in range(2):
             self.ranges.append([-self.two_dim_docking.unsafe_pos-0.2, self.two_dim_docking.unsafe_pos+0.2])
@@ -201,17 +211,138 @@ class SampleData(pl.LightningDataModule):
     def safe_mask(self, x):
         safe_mask = x[:, 3:].norm(dim=-1, p=2) <= self.v0+self.v1*(x[:, :2].norm(dim=-1, p=2))
         return safe_mask
+
     '''
+    def gen_vel_limit(self, x, y):
+        n = 0.001027
+        v0 = 0.2
+        v1 = 2*n
+        dist = torch.sqrt(torch.pow(x,2) + torch.pow(y,2))
+        return torch.round(v0 + v1*dist,decimals=4)
 
     def prepare_data(self):
+
+        # First sample safe velocities
+        x = torch.Tensor(self.num_points*5, 2).uniform_(0.0, 1.0)
+
+        for i in range(2):
+            min_val, max_val = self.ranges[i]
+            x[:, i] = x[:, i] * (max_val - min_val) + min_val
+
+        th = torch.Tensor(self.num_points*5).uniform_(0.0, 2*np.pi)
+        v_l2 = torch.Tensor(self.num_points*5).uniform_(0.0, 1.0)
+        safe_v = self.gen_vel_limit(x[:,0], x[:,1])
+        v_l2 = v_l2 * (safe_v - 0.0) + 0.0
+        vx = v_l2 * torch.cos(th)
+        x = torch.cat((x, torch.unsqueeze(vx, 1)), 1)
+        vy = v_l2 * torch.sin(th)
+        x = torch.cat((x, torch.unsqueeze(vy, 1)), 1)
+
+        print("preparing data")
+        nongoal_mask_x = self.two_dim_docking.nongoal_mask(x)
+        x = x[nongoal_mask_x]
+        not_unsafe_mask_x = ~self.two_dim_docking.unsafe_mask_init(x)
+        x = x[not_unsafe_mask_x]
         x = torch.Tensor(self.num_points*4//5, self.dim).uniform_(
             0.0, 1.0
         )
 
-        for i in range(self.dim):
+        while (len(x) < 4 * self.num_points//5):
+            print("num_typical " + str(len(x)))
+            x = torch.Tensor(self.num_points*5, 2).uniform_(0.0, 1.0)
+
+            for i in range(2):
+                min_val, max_val = self.ranges[i]
+                x[:, i] = x[:, i] * (max_val - min_val) + min_val
+
+            th = torch.Tensor(self.num_points*5).uniform_(0.0, 2*np.pi)
+            v_l2 = torch.Tensor(self.num_points*5).uniform_(0.0, 1.0)
+            safe_v = self.gen_vel_limit(x[:,0], x[:,1])
+            v_l2 = v_l2 * (safe_v - 0.0) + 0.0
+            vx = v_l2 * torch.cos(th)
+            x = torch.cat((x, torch.unsqueeze(vx, 1)), 1)
+            vy = v_l2 * torch.sin(th)
+            x = torch.cat((x, torch.unsqueeze(vy, 1)), 1)
+
+            nongoal_mask_x = self.two_dim_docking.nongoal_mask(x)
+            x = x[nongoal_mask_x]
+            not_unsafe_mask_x = ~self.two_dim_docking.unsafe_mask_init(x)
+            x = x[not_unsafe_mask_x]
+
+        random_indices = torch.randperm(len(x))
+
+        x = x[random_indices]
+
+        x_train = x[:4 * self.num_points//5]
+
+        #finishing part 1 sampling
+
+
+        # Now sample for safe regions
+        x = torch.Tensor(self.num_points*5, 2).uniform_(0.0, 1.0)
+
+        for i in range(2):
             min_val, max_val = self.ranges[i]
             x[:, i] = x[:, i] * (max_val - min_val) + min_val
 
+        zeros_x = torch.zeros(self.num_points*5)
+        x = torch.cat((x, torch.unsqueeze(zeros_x, 1)), 1)
+        x = torch.cat((x, torch.unsqueeze(zeros_x, 1)), 1)
+
+        safe_mask_x = self.two_dim_docking.safe_mask(x)
+        x = x[safe_mask_x]
+        
+        while (len(x) < self.num_points//5):
+            print("num_safe " + str(len(x)))
+            x = torch.Tensor(self.num_points*5, 2).uniform_(0.0, 1.0)
+
+            for i in range(2):
+                min_val, max_val = self.ranges[i]
+                x[:, i] = x[:, i] * (max_val - min_val) + min_val
+
+            zeros_x = torch.zeros(self.num_points*5)
+            x = torch.cat((x, torch.unsqueeze(zeros_x, 1)), 1)
+            x = torch.cat((x, torch.unsqueeze(zeros_x, 1)), 1)
+
+            safe_mask_x = self.two_dim_docking.safe_mask(x)
+            x = x[safe_mask_x]
+
+        random_indices = torch.randperm(len(x))
+
+        x = x[random_indices]
+
+        x_train_2 = x[:self.num_points//5]
+        torch.save(x_train_2, self.save_file)
+        #finishing part 2 sampling
+
+        x_train = torch.cat((x_train, x_train_2))
+
+        random_indices = torch.randperm(len(x_train))
+
+        x_train = x_train[random_indices]
+
+        torch.save(x_train, self.train_file_name)
+
+        '''
+        # Next sample unsafe velocities
+        z = torch.Tensor(self.num_points*2//5, 2).uniform_(0.0, 1.0)
+
+        for i in range(2):
+            min_val, max_val = self.ranges[i]
+            z[:, i] = z[:, i] * (max_val - min_val) + min_val
+
+        th = torch.Tensor(self.num_points*2//5).uniform_(0.0, 2*np.pi)
+        v_l2 = torch.Tensor(self.num_points*2//5).uniform_(0.0, 1.0)
+        safe_v = self.gen_vel_limit(z[:,0], z[:,1])
+        v_l2 = v_l2 * (self.rand_vel_upper - safe_v) + safe_v
+        vx = v_l2 * torch.cos(th)
+        z = torch.cat((z, torch.unsqueeze(vx, 1)), 1)
+        vy = v_l2 * torch.sin(th)
+        z = torch.cat((z, torch.unsqueeze(vy, 1)), 1)
+
+        
+        x = torch.cat((x,z))
+    
         y = torch.Tensor(self.num_points//5, self.dim).uniform_(
             0.0, 1.0
         )
@@ -223,7 +354,8 @@ class SampleData(pl.LightningDataModule):
             y[:, j+2] = y[:, j+2] * (self.two_dim_docking.st_vel_limit - (-self.two_dim_docking.st_vel_limit)) + (-self.two_dim_docking.st_vel_limit)
 
         x = torch.cat((x,y))
-        
+        '''
+
         '''
         #confirm data is safe to begin with
         for _ in range(self.max_tries):
@@ -246,19 +378,39 @@ class SampleData(pl.LightningDataModule):
             x[violations] = x_new
         '''
 
-        random_indices = torch.randperm(len(x))
+         # Sample safe velocities
+        x = torch.Tensor(self.num_points*2//50, 2).uniform_(0.0, 1.0)
 
-        x_train = x[random_indices]
-
-        torch.save(x_train, self.train_file_name)
-
-        x = torch.Tensor(self.num_points*4//50, self.dim).uniform_(
-            0.0, 1.0
-        )
-
-        for i in range(self.dim):
+        for i in range(2):
             min_val, max_val = self.ranges[i]
             x[:, i] = x[:, i] * (max_val - min_val) + min_val
+
+        th = torch.Tensor(self.num_points*2//50).uniform_(0.0, 2*np.pi)
+        v_l2 = torch.Tensor(self.num_points*2//50).uniform_(0.0, 1.0)
+        safe_v = self.gen_vel_limit(x[:,0], x[:,1])
+        v_l2 = v_l2 * (safe_v - 0.0) + 0.0
+        vx = v_l2 * torch.cos(th)
+        x = torch.cat((x, torch.unsqueeze(vx, 1)), 1)
+        vy = v_l2 * torch.sin(th)
+        x = torch.cat((x, torch.unsqueeze(vy, 1)), 1)
+
+        # Sample unsafe velocities
+        z = torch.Tensor(self.num_points*2//50, 2).uniform_(0.0, 1.0)
+
+        for i in range(2):
+            min_val, max_val = self.ranges[i]
+            z[:, i] = z[:, i] * (max_val - min_val) + min_val
+
+        th = torch.Tensor(self.num_points*2//50).uniform_(0.0, 2*np.pi)
+        v_l2 = torch.Tensor(self.num_points*2//50).uniform_(0.0, 1.0)
+        safe_v = self.gen_vel_limit(z[:,0], z[:,1])
+        v_l2 = v_l2 * (self.rand_vel_upper - safe_v) + safe_v
+        vx = v_l2 * torch.cos(th)
+        z = torch.cat((z, torch.unsqueeze(vx, 1)), 1)
+        vy = v_l2 * torch.sin(th)
+        z = torch.cat((z, torch.unsqueeze(vy, 1)), 1)
+
+        x = torch.cat((x,z))
 
         y = torch.Tensor(self.num_points//50, self.dim).uniform_(
             0.0, 1.0
@@ -319,7 +471,7 @@ class SampleData(pl.LightningDataModule):
     
 
 class Trainer(pl.LightningModule):
-    def __init__(self, model, V, controller, datamodule, out_model, out_controller, threshold, lip_loss, primal_learning_rate = 1e-3, goalfactor = 1, decreasefactor = 1e1, nongoalfactor = 1, goaleps = 1e-4, nongoaleps=1e-4, descenteps = 1e-4, safe_level = 1, safe_factor = 1, unsafe_factor = 1e2, lipschitz_factor = 1,  eps = 1e-5):
+    def __init__(self, model, V, controller, datamodule, out_model, out_controller, threshold, lip_loss, primal_learning_rate = 1e-3, goalfactor = 1, decreasefactor = 1e1, nongoalfactor = 1, goaleps = 1e-4, nongoaleps=1e-4, descenteps = 1e-3, safe_level = 1, safe_factor = 1, unsafe_factor = 1e2, lipschitz_factor = 1,  eps = 1e-4):
         super().__init__()
         self.automatic_optimization = False
         self.epoch = 0
@@ -339,10 +491,13 @@ class Trainer(pl.LightningModule):
         self.safe_level = safe_level
         self.safe_factor = safe_factor
         self.unsafe_factor = unsafe_factor
-        self.eps = descenteps * 0.1
+        self.eps = eps
         self.threshold = threshold
         self.init_val = 0
         self.lip_loss = lip_loss
+
+        self.delta_d = 1e-4 - 1e-7
+        self.delta_s = 1e-4 - 1e-5
 
         self.out_model = out_model
         self.out_controller = out_controller
@@ -406,9 +561,9 @@ class Trainer(pl.LightningModule):
         if len(V_safe) == 0:
             safe_violation,safe_term,safe_acc = 0,0,0
         else:
-            safe_violation = F.relu(self.eps + V_safe - self.safe_level)
-            valid_violation = F.relu(self.eps - V_safe)
-            safe_term = self.safe_factor * (safe_violation.mean() + valid_violation.mean())
+            safe_violation = F.relu(self.delta_s + self.eps + V_safe - self.safe_level)
+            #valid_violation = F.relu(self.eps - V_safe)
+            safe_term = self.safe_factor * (safe_violation.mean())
             safe_acc = 0
 
         '''
@@ -461,7 +616,14 @@ class Trainer(pl.LightningModule):
             V_nongoal[unsafe_mask] = 1.2 * self.safe_level
             #condition_active = torch.sigmoid(10 * (self.safe_level + self.goaleps - V))
             condition_original = (V_nongoal <= self.safe_level)
-            condition_original = condition_original.float()
+            condition_original = torch.flatten(condition_original)
+            
+            #condition_original = condition_original.float()
+            x = x[condition_original]
+            V_nongoal = V_nongoal[condition_original]
+            if len(V_nongoal) == 0:
+                descent_term, descent_acc, nongoal_term, nongoal_acc = 0,0,0,0
+                return descent_term, descent_acc, nongoal_term, nongoal_acc
 
             '''
             default_violation = F.relu(self.nongoaleps-V_nongoal)
@@ -475,10 +637,10 @@ class Trainer(pl.LightningModule):
 
             x_next = self.controller.next_step(x)
             unsafe_mask = self.model.unsafe_mask(x_next)
-            #goal_mask = self.model.goal_mask(x_next)
+            goal_mask = self.model.goal_mask(x_next)
             V_next = self.V(x_next)
             V_next[unsafe_mask] = 1.2 * self.safe_level
-            V_next[goal_mask] = -0.1 # if breaks i added this
+            V_next[goal_mask] = -10 # if breaks i added this
 
             '''
             condition_new = x_next[:,0] > 0.35
@@ -492,26 +654,28 @@ class Trainer(pl.LightningModule):
 
             #int_inactive_next = (V_next >= (self.safe_level + self.eps)).float()
 
-            descent_violation = F.relu(self.descenteps + (V_next - V_nongoal)/(self.controller.t))
-            descent_term = self.decreasefactor * (descent_violation * condition_original).mean()
+            descent_violation = F.relu(self.delta_d + self.descenteps + (V_next - V_nongoal)/(self.controller.t))
+            descent_term = self.decreasefactor * (descent_violation).mean()
 
             descent_acc = 0
 
         return descent_term, descent_acc, nongoal_term, nongoal_acc
     
-    def lipschitz_loss(self):
-        lip_product = 1.0
+    # def lipschitz_loss(self):
+    #     lip_product = 1.0
         
-        for layer in self.V.modules():
-            if isinstance(layer, torch.nn.Linear):
-                W = layer.weight
-                sigma = torch.linalg.norm(W, ord=2)  # Spectral norm
-                lip_product *= sigma
+    #     for layer in self.V.modules():
+    #         if isinstance(layer, torch.nn.Linear):
+    #             W = layer.weight
+    #             sigma = torch.linalg.norm(W, ord=2)  # Spectral norm
+    #             lip_product *= sigma
 
-        lipschitz_violation = F.relu(lip_product - 1)
-        lipschitz_term = self.lipschitz_factor * lipschitz_violation
+    #     lip_goal = 3.0
 
-        return lipschitz_term
+    #     lipschitz_violation = F.relu(lip_product - lip_goal)
+    #     lipschitz_term = self.lipschitz_factor * lipschitz_violation
+
+    #     return lipschitz_term
 
     def training_step(self, batch, batch_idx):
         x, goal_mask,nongoal_mask,safe_mask,unsafe_mask = batch
@@ -519,17 +683,19 @@ class Trainer(pl.LightningModule):
         torch.set_grad_enabled(True)
         goal_term, goal_acc = self.goal_loss(x, goal_mask, nongoal_mask,safe_mask,unsafe_mask)
         descent_term, descent_acc, nongoal_term, nongoal_acc = self.descent_loss(x, goal_mask, nongoal_mask,safe_mask,unsafe_mask)
-        if self.lip_loss:
-            lipschitz_term = self.lipschitz_loss()
-        else:
-            lipschitz_term = 0.0
+        # if self.lip_loss:
+        #     lipschitz_term = self.lipschitz_loss()
+        # else:
+        #     lipschitz_term = 0.0
+        lipschitz_term = 0
+
         total_loss = descent_acc + descent_term + nongoal_term + nongoal_acc + goal_term + goal_acc + lipschitz_term
         #total_loss = descent_acc + descent_term + nongoal_term + nongoal_acc + goal_term + goal_acc
 
         opt_v, opt_f = self.optimizers()
 
         if total_loss > 0:
-            if self.epoch >= 6:
+            if self.epoch >= 3:
                 opt_f.zero_grad()
                 self.manual_backward(total_loss)
                 opt_f.step()
@@ -537,6 +703,9 @@ class Trainer(pl.LightningModule):
                 opt_v.zero_grad()
                 self.manual_backward(total_loss)
                 opt_v.step()
+        else:
+            total_loss = torch.zeros(1)[0]
+
 
         '''
         if batch_idx == 0:
@@ -574,10 +743,11 @@ class Trainer(pl.LightningModule):
         #safe_term, safe_acc, unsafe_term, unsafe_acc = self.goal_loss(x, goal_mask, nongoal_mask,safe_mask,unsafe_mask) 
         goal_term, goal_acc = self.goal_loss(x, goal_mask, nongoal_mask,safe_mask,unsafe_mask)
         descent_term, descent_acc, nongoal_term, nongoal_acc = self.descent_loss(x, goal_mask, nongoal_mask,safe_mask,unsafe_mask)
-        if self.lip_loss:
-            lipschitz_term = self.lipschitz_loss()
-        else:
-            lipschitz_term = 0.0
+        # if self.lip_loss:
+        #     lipschitz_term = self.lipschitz_loss()
+        # else:
+        #     lipschitz_term = 0.0
+        lipschitz_term = 0
 
         total_loss = descent_acc + descent_term + nongoal_term + nongoal_acc + goal_term + goal_acc + lipschitz_term
         #total_loss = descent_acc + descent_term + nongoal_term + nongoal_acc + goal_term + goal_acc
@@ -601,7 +771,7 @@ class Trainer(pl.LightningModule):
         self.nongoal_acc_val.append(nongoal_acc)
         self.descent_losses_val.append(descent_term)
         self.descent_acc_val.append(descent_acc)
-        self.lipschitz_loss_val.append(lipschitz_term)
+        # self.lipschitz_loss_val.append(lipschitz_term)
         #self.gross_viol_val.append(gross_viol)
         return batch_dict
     
@@ -633,7 +803,7 @@ class Trainer(pl.LightningModule):
             nongoal_acc += self.nongoal_acc_train[i]
             descent += self.descent_losses_train[i]
             descent_acc += self.descent_acc_train[i]
-            lipschitz_loss += self.lipschitz_loss_train[i]
+            # lipschitz_loss += self.lipschitz_loss_train[i]
             #gross += self.gross_viol_train[i]
 
         print("Current loss: ", total.item()/len(self.losses_train))
@@ -647,8 +817,8 @@ class Trainer(pl.LightningModule):
         print("Nongoal acc: ", nongoal_acc/len(self.losses_train))
         print("Descent loss: ", descent.item()/len(self.losses_train))
         print("Descent acc: ", descent_acc/len(self.losses_train))
-        if self.lip_loss:
-            print("Lipschitz loss: ", lipschitz_loss.item()/len(self.losses_train))
+        # if self.lip_loss:
+        #     print("Lipschitz loss: ", lipschitz_loss.item()/len(self.losses_train))
         print("Total loss:", total.item())
         #print("Gross: ", gross/len(self.losses_train))
 
@@ -707,7 +877,7 @@ class Trainer(pl.LightningModule):
             nongoal_acc += self.nongoal_acc_val[i]
             descent += self.descent_losses_val[i]
             descent_acc += self.descent_acc_val[i]
-            lipschitz_loss += self.lipschitz_loss_val[i]
+            # lipschitz_loss += self.lipschitz_loss_val[i]
             #gross += self.gross_viol_val[i]
 
         print("Current loss: ", total.item()/len(self.losses_val))
@@ -721,8 +891,8 @@ class Trainer(pl.LightningModule):
         print("Nongoal acc: ", nongoal_acc/len(self.losses_val))
         print("Descent loss: ", descent.item()/len(self.losses_val))
         print("Descent acc: ", descent_acc/len(self.losses_val))
-        if self.lip_loss:
-            print("Lipschitz loss: ", lipschitz_loss.item()/len(self.losses_val))
+        # if self.lip_loss:
+        #     print("Lipschitz loss: ", lipschitz_loss.item()/len(self.losses_val))
         print("Total loss:", total.item())
         #print("Gross: ", gross/len(self.losses_val))
         
@@ -770,6 +940,7 @@ class SampleDataRetrain(pl.LightningDataModule):
         self.train_file = train_file
         self.val_file = val_file
         self.counterexample_file = "counterexamples/counterexamples.pt"
+        self.save_file = "counterexamples/safes.pt"
 
         for _ in range(2):
             self.ranges.append([-self.two_dim_docking.unsafe_pos-0.2, self.two_dim_docking.unsafe_pos+0.2])
@@ -783,23 +954,54 @@ class SampleDataRetrain(pl.LightningDataModule):
         return safe_mask
     '''
 
+    def gen_vel_limit(self, x, y):
+        n = 0.001027
+        v0 = 0.2
+        v1 = 2*n
+        dist = torch.sqrt(torch.pow(x,2) + torch.pow(y,2))
+        return torch.round(v0 + v1*dist,decimals=4)
+
     def prepare_data(self):
         x_train = torch.load(self.in_train_file)
         torch.save(x_train, self.train_file)
 
         #num_train = len(x_train)
         num_added = self.num_dpoints
-
-        x_counterexamples = torch.Tensor(num_added, self.dim).uniform_(
-                0.0, 1.0
-            )
-        for i in range(self.dim):
-            min_val, max_val = self.ranges[i]
-            x_counterexamples[:, i] = x_counterexamples[:, i] * (max_val - min_val) + min_val
-
+        
         if self.epoch > 0:
             x_original = torch.load(self.counterexample_file)
-            x_counterexamples = torch.cat((x_counterexamples, x_original))
+            x_counterexamples = x_original[:num_added*50]
+        else:
+            x = torch.Tensor(num_added*100, 2).uniform_(0.0, 1.01)
+
+            for i in range(2):
+                min_val, max_val = self.ranges[i]
+                x[:, i] = x[:, i] * (max_val - min_val) + min_val
+
+            th = torch.Tensor(num_added*100).uniform_(0.0, 2*np.pi)
+            v_l2 = torch.Tensor(num_added*100).uniform_(0.0, 1.01)
+            safe_v = self.gen_vel_limit(x[:,0], x[:,1])
+            v_l2 = v_l2 * (safe_v - 0.0) + 0.0
+            vx = v_l2 * torch.cos(th)
+            x = torch.cat((x, torch.unsqueeze(vx, 1)), 1)
+            vy = v_l2 * torch.sin(th)
+            x = torch.cat((x, torch.unsqueeze(vy, 1)), 1)
+
+            print("preparing data")
+            nongoal_mask_x = self.two_dim_docking.nongoal_mask(x)
+            x = x[nongoal_mask_x]
+            not_unsafe_mask_x = ~self.two_dim_docking.unsafe_mask_init(x)
+            x = x[not_unsafe_mask_x]
+            
+            random_indices = torch.randperm(len(x))
+
+            x = x[random_indices]
+
+            x_counterexamples = x[:num_added]
+
+
+        x_2 = torch.load(self.save_file)
+        x_counterexamples = torch.cat((x_counterexamples,x_2))
 
         for i in range(len(self.counterexamples)):
             '''
@@ -810,7 +1012,7 @@ class SampleDataRetrain(pl.LightningDataModule):
             x_train = torch.cat((x_train,new_points))
             '''
             x_counterexamples = torch.cat((x_counterexamples,torch.unsqueeze(torch.Tensor(self.counterexamples[i]),0)))
-
+            x_2 = torch.cat((x_2,torch.unsqueeze(torch.Tensor(self.counterexamples[i]),0)))
             '''
             new_points = torch.Tensor(num_added, self.dim).uniform_(0.0, 1.0)
             for j in range(2):
@@ -822,22 +1024,66 @@ class SampleDataRetrain(pl.LightningDataModule):
             x_counterexamples = torch.cat((x_counterexamples,new_points))
             '''
 
-            new_points = torch.Tensor(num_added//len(self.counterexamples), self.dim).uniform_(0.0, 1.0)
+            new_points = torch.Tensor(num_added * 100, self.dim).uniform_(0.0, 1.01)
             for j in range(2):
                 new_points[:, j] = new_points[:, j] * (0.2) + self.counterexamples[i][j] - 0.1
             for j in range(2):
                 new_points[:, j+2] = new_points[:, j+2] * (0.1) + self.counterexamples[i][j+2] - 0.05
 
+            nongoal_mask_x = self.two_dim_docking.nongoal_mask(new_points)
+            new_points = new_points[nongoal_mask_x]
+            not_unsafe_mask_x = ~self.two_dim_docking.unsafe_mask_init(new_points)
+            new_points = new_points[not_unsafe_mask_x]
+
+
+            while (len(new_points) < num_added-1):
+                print("num counterexamples 1 " + str(len(num_added)))
+                new_points = torch.Tensor(num_added * 100, self.dim).uniform_(0.0, 1.01)
+                for j in range(2):
+                    new_points[:, j] = new_points[:, j] * (0.2) + self.counterexamples[i][j] - 0.1
+                for j in range(2):
+                    new_points[:, j+2] = new_points[:, j+2] * (0.1) + self.counterexamples[i][j+2] - 0.05
+
+                nongoal_mask_x = self.two_dim_docking.nongoal_mask(new_points)
+                new_points = new_points[nongoal_mask_x]
+                not_unsafe_mask_x = ~self.two_dim_docking.unsafe_mask_init(new_points)
+                new_points = new_points[not_unsafe_mask_x]
+
+            new_points_safe = new_points.detach().clone()
+            for j in range(2):
+                new_points_safe[:,j+2] = 0
+            safe_mask_x = self.two_dim_docking.safe_mask(new_points_safe)
+            new_points_safe = new_points_safe[safe_mask_x]
+            new_points_safe = new_points_safe[:num_added//10]
+            x_2 = torch.cat((x_2, new_points_safe))
+
+            new_points = new_points[:num_added-1]
+
             #x_train = torch.cat((x_train,new_points))
             x_counterexamples = torch.cat((x_counterexamples,new_points))
 
-
-
         for i in range(len(self.counterexample_ranges)):
-            new_points = torch.Tensor(num_added//len(self.counterexample_ranges), self.dim).uniform_(0.0, 1.0)
+            new_points = torch.Tensor(100*num_added, self.dim).uniform_(0.0, 1.01)
             for j in range(4):
                 new_points[:, j] = self.counterexample_ranges[i][j][0] + (self.counterexample_ranges[i][j][1] - self.counterexample_ranges[i][j][0]) * new_points[:, j]
             
+            nongoal_mask_x = self.two_dim_docking.nongoal_mask(new_points)
+            new_points = new_points[nongoal_mask_x]
+            not_unsafe_mask_x = ~self.two_dim_docking.unsafe_mask_init(new_points)
+            new_points = new_points[not_unsafe_mask_x]
+
+            new_points_safe = new_points.detach().clone()
+            for j in range(2):
+                new_points_safe[:,j+2] = 0
+            safe_mask_x = self.two_dim_docking.safe_mask(new_points_safe)
+            new_points_safe = new_points_safe[safe_mask_x]
+            new_points_safe = new_points_safe[:num_added//10]
+            x_2 = torch.cat((x_2, new_points_safe))
+
+            print("num counterexamples 2 " + str(len(new_points)))
+            print(num_added)
+
+            new_points = new_points[:num_added]
             #x_train = torch.cat((x_train,new_points))
             x_counterexamples = torch.cat((x_counterexamples,new_points))
 
@@ -848,7 +1094,7 @@ class SampleDataRetrain(pl.LightningDataModule):
         random_indices = torch.randperm(len(x_counterexamples))
         x_counterexamples = x_counterexamples[random_indices]
         torch.save(x_counterexamples, self.counterexample_file)
-
+        torch.save(x_2, self.save_file)
         '''
         x = torch.Tensor(self.num_points*4//50, self.dim).uniform_(
             0.0, 1.0
@@ -939,7 +1185,7 @@ class SampleDataRetrain(pl.LightningDataModule):
             shuffle=True
         )
 class TrainerRetrain(pl.LightningModule):
-    def __init__(self, model, V, controller, datamodule, out_model, out_controller, threshold, lip_loss, primal_learning_rate = 1e-4, goalfactor = 1, decreasefactor = 1e1, nongoalfactor = 1, goaleps = 1e-4, nongoaleps=1e-4, descenteps = 1e-4, safe_level = 1, safe_factor = 1, unsafe_factor = 1e2, lipschitz_factor = 1,  eps = 1e-5):
+    def __init__(self, model, V, controller, datamodule, out_model, out_controller, threshold, lip_loss, primal_learning_rate = 1e-5, goalfactor = 1, decreasefactor = 1e1, nongoalfactor = 1, goaleps = 1e-4, nongoaleps=1e-4, descenteps = 1e-4, safe_level = 1, safe_factor = 1, unsafe_factor = 1e2, lipschitz_factor = 1,  eps = 1e-4):
         super().__init__()
         self.epoch = 0
         self.automatic_optimization = False
@@ -962,6 +1208,9 @@ class TrainerRetrain(pl.LightningModule):
         self.threshold = threshold
         self.init_val = 0
         self.lip_loss = lip_loss
+
+        self.delta_d = 1e-4 - 1e-7
+        self.delta_s = 1e-4 - 1e-5
 
         self.out_model = out_model
         self.out_controller = out_controller
@@ -1025,9 +1274,9 @@ class TrainerRetrain(pl.LightningModule):
         if len(V_safe) == 0:
             safe_violation,safe_term,safe_acc = 0,0,0
         else:
-            safe_violation = F.relu(self.eps + V_safe - self.safe_level)
-            valid_violation = F.relu(self.eps - V_safe)
-            safe_term = self.safe_factor * (safe_violation.mean() + valid_violation.mean())
+            safe_violation = F.relu(self.delta_s + self.eps + V_safe - self.safe_level)
+            #valid_violation = F.relu(self.eps - V_safe)
+            safe_term = self.safe_factor * (safe_violation.mean())
             safe_acc = 0
 
         '''
@@ -1048,9 +1297,9 @@ class TrainerRetrain(pl.LightningModule):
         if len(V_safe_c) == 0:
             safe_violation_c,safe_term_c,safe_acc_c = 0,0,0
         else:
-            safe_violation_c = F.relu(self.eps + V_safe_c - self.safe_level)
-            valid_violation_c = F.relu(self.eps - V_safe_c)
-            safe_term_c = (self.safe_factor * 100 * (safe_violation_c + valid_violation_c)).mean()
+            safe_violation_c = F.relu(self.delta_s + self.eps + V_safe_c - self.safe_level)
+            #valid_violation_c = F.relu(self.eps - V_safe_c)
+            safe_term_c = (self.safe_factor * 100 * (safe_violation_c )).mean()
             safe_acc_c = 0
 
         safe_term += safe_term_c
@@ -1104,72 +1353,95 @@ class TrainerRetrain(pl.LightningModule):
             V_nongoal[unsafe_mask] = 1.2 * self.safe_level
             #condition_active = torch.sigmoid(10 * (self.safe_level + self.goaleps - V))
             condition_original = (V_nongoal <= self.safe_level)
-            condition_original = condition_original.float()
+            condition_original = torch.flatten(condition_original)
+            
+            #condition_original = condition_original.float()
+            x = x[condition_original]
+            V_nongoal = V_nongoal[condition_original]
+            if len(V_nongoal) == 0:
+                descent_term, descent_acc, nongoal_term, nongoal_acc = 0,0,0,0
+            else:
+                #print(V_nongoal)
 
-            '''
-            default_violation = F.relu(self.nongoaleps-V_nongoal)
-            nongoal_term = self.nongoalfactor * (default_violation * condition_original).mean()
-            '''
-            nongoal_term = 0
-            nongoal_acc = 0
+                #default_violation = F.relu(self.nongoaleps-V_nongoal)
+                nongoal_term = 0
+                nongoal_acc = 0
 
-        
-            #nongoal_term = self.nongoalfactor * (default_violation).mean()
+                
+                #nongoal_term = self.nongoalfactor * (default_violation).mean()
 
-            x_next = self.controller.next_step(x)
-            unsafe_mask = self.model.unsafe_mask(x_next)
-            goal_mask = self.model.goal_mask(x_next)
-            V_next = self.V(x_next)
-            V_next[unsafe_mask] = 1.2 * self.safe_level
-            V_next[goal_mask] = -0.1
+                x_next = self.controller.next_step(x)
+                unsafe_mask = self.model.unsafe_mask(x_next)
+                goal_mask = self.model.goal_mask(x_next)
+                V_next = self.V(x_next)
+                V_next[unsafe_mask] = 1.2
+                V_next[goal_mask] = -10
 
-            '''
-            condition_new = x_next[:,0] > 0.35
-            condition_new.logical_or_(x_next[:,1] > 0.35)
-            condition_new.logical_or_(x_next[:,2] > 0.6)
-            condition_new.logical_or_(x_next[:,3] > 0.6)
-            condition_new = torch.reshape(condition_new, (len(x_next),1))
+                '''
+                condition_new = x_next[:,0] > 0.35
+                condition_new.logical_or_(x_next[:,1] > 0.35)
+                condition_new.logical_or_(x_next[:,2] > 0.6)
+                condition_new.logical_or_(x_next[:,3] > 0.6)
+                condition_new = torch.reshape(condition_new, (len(x_next),1))
 
-            condition_new_active = condition_new.float()
-            '''
+                condition_new_active = condition_new.float()
+                '''
 
-            #int_inactive_next = (V_next >= (self.safe_level + self.eps)).float()
-
-            descent_violation = F.relu(self.descenteps + (V_next - V_nongoal)/(self.controller.t))
-            descent_term = self.decreasefactor * (descent_violation * condition_original).mean()
-
-            descent_acc = 0
+                #int_inactive_next = (V_next >= (self.safe_level + self.eps)).float()
+                
+                descent_violation = F.relu(self.delta_d + self.descenteps + (V_next - V_nongoal)/(self.controller.t))
+                descent_term = self.decreasefactor * (descent_violation).mean()
+                descent_acc = 0
 
         x_c = x_c[nongoal_mask_c]
         if len(x_c) == 0:
             nongoal_term_c, nongoal_acc_c = 0, 0
             descent_acc_c, descent_term_c = 0, 0
         else:
-            unsafe_mask_c = self.model.unsafe_mask_init(x_c)
             V_nongoal_c = self.V(x_c)
-            V_nongoal_c[unsafe_mask_c] = 1.2 * self.safe_level
+            unsafe_mask_c = self.model.unsafe_mask_init(x_c)
+            V_nongoal_c[unsafe_mask_c] = 1.2
             #condition_active = torch.sigmoid(10 * (self.safe_level + self.goaleps - V))
             condition_original_c = (V_nongoal_c <= self.safe_level)
-            condition_original_c = condition_original_c.float()
+            condition_original_c = torch.flatten(condition_original_c)
+            #condition_original_c = condition_original_c.float()
 
-            '''
-            default_violation_c = F.relu(self.nongoaleps-V_nongoal_c)
-            nongoal_term_c = torch.sum(default_violation_c * condition_original_c)
-            '''
-            nongoal_term_c = 0
-            nongoal_acc_c = 0
+            x_c = x_c[condition_original_c]
+            V_nongoal_c = V_nongoal_c[condition_original_c]
+            if len(V_nongoal_c) == 0:
+                descent_term_c, descent_acc_c, nongoal_term_c, nongoal_acc_c = 0,0,0,0
+            else:
+                #print(V_nongoal)
 
-            x_next_c = self.controller.next_step(x_c)
-            unsafe_mask_c = self.model.unsafe_mask(x_next_c)
-            goal_mask = self.model.goal_mask(x_next)
-            V_next_c = self.V(x_next_c)
-            V_next_c[unsafe_mask_c] = 1.2 * self.safe_level
-            V_next_c[goal_mask] = -0.1
+                #default_violation = F.relu(self.nongoaleps-V_nongoal)
+                nongoal_term_c = 0
+                nongoal_acc_c = 0
 
-            descent_violation_c = F.relu(self.descenteps + (V_next_c - V_nongoal_c)/(self.controller.t))
-            descent_term_c = (100 * descent_violation_c * condition_original_c).mean()
+                
+                #nongoal_term = self.nongoalfactor * (default_violation).mean()
 
-            descent_acc_c = 0
+                x_next_c = self.controller.next_step(x_c)
+                unsafe_mask_c = self.model.unsafe_mask(x_next_c)
+                goal_mask_c = self.model.goal_mask(x_next_c)
+                V_next_c = self.V(x_next_c)
+                V_next_c[unsafe_mask_c] = 1.2
+                V_next_c[goal_mask_c] = -10
+
+                '''
+                condition_new = x_next[:,0] > 0.35
+                condition_new.logical_or_(x_next[:,1] > 0.35)
+                condition_new.logical_or_(x_next[:,2] > 0.6)
+                condition_new.logical_or_(x_next[:,3] > 0.6)
+                condition_new = torch.reshape(condition_new, (len(x_next),1))
+
+                condition_new_active = condition_new.float()
+                '''
+
+                #int_inactive_next = (V_next >= (self.safe_level + self.eps)).float()
+
+                descent_violation_c = F.relu(self.delta_d + self.descenteps + (V_next_c - V_nongoal_c)/(self.controller.t))
+                descent_term_c = (100 * descent_violation_c * condition_original_c).mean()
+                descent_acc_c = 0
 
         descent_term += descent_term_c
         descent_acc += descent_acc_c
@@ -1198,7 +1470,7 @@ class TrainerRetrain(pl.LightningModule):
         if Linf:
             lip_product = math.sqrt(6) * lip_product / 2.0
 
-        lip_goal = 1.0
+        lip_goal = 3.0
 
         lipschitz_violation = F.relu(lip_product - lip_goal)
         lipschitz_term = self.lipschitz_factor * lipschitz_violation
@@ -1211,12 +1483,14 @@ class TrainerRetrain(pl.LightningModule):
         #safe_term, safe_acc, unsafe_term, unsafe_acc = self.goal_loss(x, goal_mask, nongoal_mask,safe_mask,unsafe_mask) 
         goal_term, goal_acc = self.goal_loss(x, x_c, goal_mask, nongoal_mask,safe_mask,unsafe_mask,goal_mask_c,nongoal_mask_c,safe_mask_c,unsafe_mask_c)
         descent_term, descent_acc, nongoal_term, nongoal_acc = self.descent_loss(x, x_c, goal_mask, nongoal_mask,safe_mask,unsafe_mask,goal_mask_c,nongoal_mask_c,safe_mask_c,unsafe_mask_c)
-        print(descent_acc, nongoal_acc, goal_acc)
+        #print(descent_acc, nongoal_acc, goal_acc)
         
         if self.lip_loss:
             lipschitz_term = self.lipschitz_loss()
         else:
             lipschitz_term = 0
+
+        lipschitz_term = 0
 
         total_loss = descent_acc + descent_term + nongoal_term + nongoal_acc + goal_term + goal_acc + lipschitz_term
         #total_loss = descent_acc + descent_term + nongoal_term + nongoal_acc + goal_term + goal_acc
@@ -1224,7 +1498,7 @@ class TrainerRetrain(pl.LightningModule):
         opt_v, opt_f = self.optimizers()
 
         if total_loss > 0:
-            if self.epoch >= 6:
+            if self.epoch >= 3:
                 opt_f.zero_grad()
                 self.manual_backward(total_loss)
                 opt_f.step()
@@ -1274,6 +1548,8 @@ class TrainerRetrain(pl.LightningModule):
             lipschitz_term = self.lipschitz_loss()
         else:
             lipschitz_term = 0.0
+
+        lipschitz_term = 0
 
         total_loss = descent_acc + descent_term + nongoal_term + nongoal_acc + goal_term + goal_acc + lipschitz_term
         #total_loss = descent_acc + descent_term + nongoal_term + nongoal_acc + goal_term + goal_acc
@@ -1343,8 +1619,8 @@ class TrainerRetrain(pl.LightningModule):
         print("Nongoal acc: ", nongoal_acc/len(self.losses_train))
         print("Descent loss: ", descent.item()/len(self.losses_train))
         print("Descent acc: ", descent_acc/len(self.losses_train))
-        if self.lip_loss:
-            print("Lipschitz loss: ", lipschitz_loss.item()/len(self.losses_train))
+        # if self.lip_loss:
+        #     print("Lipschitz loss: ", lipschitz_loss.item()/len(self.losses_train))
         print("Total loss:", total.item())
         #print("Gross: ", gross/len(self.losses_train))
 
@@ -1417,8 +1693,8 @@ class TrainerRetrain(pl.LightningModule):
         print("Nongoal acc: ", nongoal_acc/len(self.losses_val))
         print("Descent loss: ", descent.item()/len(self.losses_val))
         print("Descent acc: ", descent_acc/len(self.losses_val))
-        if self.lip_loss:
-            print("Lipschitz loss: ", lipschitz_loss.item()/len(self.losses_val))
+        # if self.lip_loss:
+        #     print("Lipschitz loss: ", lipschitz_loss.item()/len(self.losses_val))
         print("Total loss:", total.item())
         #print("Gross: ", gross/len(self.losses_val))
         
@@ -1447,7 +1723,7 @@ class TrainerRetrain(pl.LightningModule):
         optimizer_controller = torch.optim.Adam(list(self.V.parameters()) + list(self.controller.nn.parameters()), lr=self.primal_learning_rate)
         return optimizer_V, optimizer_controller
 
-def train_model(st_pos, unsafe_pos, vel_limit, out_train_file, out_val_file, out_model_file, out_controller_file, threshold, initial_controller_file, dynamic_file, lip_loss, descenteps=1e-4, lr=1e-3):
+def train_model(st_pos, unsafe_pos, vel_limit, out_train_file, out_val_file, out_model_file, out_controller_file, threshold, initial_controller_file, dynamic_file, lip_loss, descenteps=1e-4, lr=5e-3):
     model = TwoDimDocking(st_pos, unsafe_pos, vel_limit)
     V = LyapunovNetworkV(model)
     datamodule = SampleData(out_train_file, out_val_file, model)
@@ -1456,7 +1732,7 @@ def train_model(st_pos, unsafe_pos, vel_limit, out_train_file, out_val_file, out
        param.requires_grad = False
 
     #p1 = [param.clone().detach() for param in dynamic.parameters()]
-    print(descenteps)
+    #print(descenteps)
     controller = Controller(dynamic = dynamic, file_name = initial_controller_file, isInitial = True)
     trainer = Trainer(model, V, controller, datamodule, out_model_file, out_controller_file, threshold, lip_loss, descenteps=descenteps, primal_learning_rate=lr)
     pltrainer = pl.Trainer(max_epochs=10000, accelerator='cpu', callbacks = [EarlyStopping(monitor="saved_loss", patience = 0, mode = 'max', verbose = True)])

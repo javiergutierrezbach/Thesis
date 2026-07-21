@@ -1,0 +1,20 @@
+Total training time for model index 0:591
+Total verification time for verification index 0:159
+Number of verification counterexamples: 5
+Number of failed cases: 0
+Verification counterexamples: [[[-0.35, 0.35], [0.76, 1.17], [-0.11, 0.0], [0.11, 0.22]], [[0.76, 1.17], [-1.0, 0.0], [0.11, 0.22], [0.11, 0.22]], [[-0.35, 0.35], [0.76, 1.17], [0.0, 0.11], [0.11, 0.22]], [[-0.35, 0.35], [-0.76, -0.35], [-0.11, 0.0], [-0.11, 0.0]], [[-0.76, -0.35], [0.0, 1.0], [-0.11, 0.0], [-0.11, 0.0]]]
+Total training time for model index 1:558
+Total training time for verification index 1:162
+Number of verification counterexamples: 5
+Number of failed cases: 0
+Verification counterexamples: [[[-0.35, 0.35], [0.76, 1.17], [-0.11, 0.0], [0.11, 0.22]], [[0.76, 1.17], [-1.0, 0.0], [0.11, 0.22], [0.11, 0.22]], [[-0.35, 0.35], [0.76, 1.17], [0.0, 0.11], [0.11, 0.22]], [[-0.76, -0.35], [0.0, 1.0], [0.0, 0.11], [-0.11, 0.0]], [[-0.76, -0.35], [0.0, 1.0], [0.0, 0.11], [0.0, 0.11]]]
+Total training time for model index 2:383
+Total training time for verification index 2:159
+Number of verification counterexamples: 3
+Number of failed cases: 0
+Verification counterexamples: [[[-0.35, 0.35], [0.76, 1.17], [-0.11, 0.0], [0.11, 0.22]], [[0.76, 1.17], [-1.0, 0.0], [0.11, 0.22], [0.11, 0.22]], [[-0.76, -0.35], [0.0, 1.0], [-0.11, 0.0], [-0.11, 0.0]]]
+Total training time for model index 3:544
+Total training time for verification index 3:169
+Number of verification counterexamples: 0
+Number of failed cases: 0
+Verification counterexamples: []

@@ -6,7 +6,7 @@ import torch.onnx
 def single_model(file_1, file_2):
 	x = torch.randn(1,6, requires_grad=True, dtype=torch.float32)
 
-	V = torch.load(file_1, map_location=torch.device('cpu')).to(torch.float64)
+	V = torch.load(file_1, map_location=torch.device('cpu')).to(torch.float32)
 	V.linear_relu_stack = V.linear_relu_stack.float()
     
 	

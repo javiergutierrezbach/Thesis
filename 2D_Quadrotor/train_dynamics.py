@@ -47,17 +47,11 @@ def train_model(train_data, out_file):
 
     model = nn.Sequential(
         nn.Linear(8, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, 6) # output: next_state
-    ).double()
-
-    model = model.double()  
+        nn.ReLU(),
+        nn.Linear(64, 64),
+        nn.ReLU(),
+        nn.Linear(64, 6), # output: next_state
+    )
 
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=0.0)
@@ -70,7 +64,7 @@ def train_model(train_data, out_file):
 
 
     N = len(dataset)
-    sample_losses = torch.zeros(N, dtype=torch.double)  # on CPU is fine
+    sample_losses = torch.zeros(N, dtype=torch.float32)  # on CPU is fine
 
     top_frac = 0.03  
     tail_weight = 0.5

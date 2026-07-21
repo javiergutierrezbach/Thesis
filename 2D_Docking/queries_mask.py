@@ -35,6 +35,8 @@ class Queries:
         start = datetime.now()
         useMILP = True
 
+        pi = np.pi
+
         options = Marabou.createOptions(verbosity=0, numWorkers=16, solveWithMILP=useMILP, snc=False) #remove tighteningStrategy
         network = Marabou.read_onnx(self.combined_model)
 
@@ -56,14 +58,134 @@ class Queries:
         network.setLowerBound(v_y_0, input[3][0])
         network.setUpperBound(v_y_0, input[3][1])
 
+        ### Constants ###
+        # k : determines number of subdivisions
+        k = 100
+
+        # alpha : constant used to in overestimate
+        alpha = np.sqrt(2) - np.sqrt(1)
+
+        # eps : constant used to approximate non-equal inequalities
+        eps = 0
+
+        # v_0_const : v_0 on official documentation
+        v_0_const = 0.2 
+
+        # v_1_const : v_1 on official documentation
+        v_1_const = 0.002054
+
+        # counterexamples_only : If true, should only return real counterexamples but will not guarentee safeness
+        counterexamples_only = False
+
+        error_o = 1.0
+        error_t = 1.0
+        if counterexamples_only:
+            error_o = 0.9999
+            error_t = 1.0001
+
+        num_dir = k*4
+        """
+        under_max_error = 1-(np.cos(2*(1-1)*pi/num_dir) * np.cos(pi/num_dir) + np.sin(2*(1-1)*pi/num_dir) * np.sin(pi/num_dir))
+        over_max_error = (np.cos(2*(1-1)*pi/num_dir) * np.cos(0) + np.sin(2*(1-1)*pi/num_dir) * np.sin(0))/np.cos(pi/num_dir)-1
+        total_max_error = 2*under_max_error + 2*over_max_error
+        under_area_error = (1-(0.5*num_dir*np.sin(2*pi/num_dir))/pi)
+        over_area_error = (1-np.cos(pi/num_dir)*(0.5*num_dir*np.sin(2*pi/num_dir))/pi)
+        total_area_error = 2*under_area_error + 2*over_area_error
+        """
+
+        ro_overs = set()
+        vo_unders = set()
+        vt_overs = set()
+        rt_unders = set()
+
+        x_0_abs = network.getNewVariable()
+        network.addAbsConstraint(x_0, x_0_abs)
+        y_0_abs = network.getNewVariable()
+        network.addAbsConstraint(y_0, y_0_abs)
+        v_x_0_abs = network.getNewVariable()
+        network.addAbsConstraint(v_x_0, v_x_0_abs)
+        v_y_0_abs = network.getNewVariable()
+        network.addAbsConstraint(v_y_0, v_y_0_abs)
+        x_t_abs = network.getNewVariable()
+        network.addAbsConstraint(x_1, x_t_abs)
+        y_t_abs = network.getNewVariable()
+        network.addAbsConstraint(y_1, y_t_abs)
+        v_x_t_abs = network.getNewVariable()
+        network.addAbsConstraint(v_x_1, v_x_t_abs)
+        v_y_t_abs = network.getNewVariable()
+        network.addAbsConstraint(v_y_1, v_y_t_abs)
+
+        # Approximations adapted from https://link.springer.com/article/10.1007/s10589-019-00083-z#Tab1
+
+        for ii in range(int(num_dir/4)+1):    
+            # Previous Position Overestimate
+            ro_over = network.getNewVariable()
+            network.addEquality([x_0_abs, y_0_abs, ro_over], [np.cos(2*ii*pi/num_dir), np.sin(2*ii*pi/num_dir), -np.cos(pi/num_dir)], 0.)
+            ro_overs.add(ro_over)
+
+            # Previous Velocity Underestimate
+            vo_under = network.getNewVariable()
+            network.addEquality([v_x_0_abs, v_y_0_abs, vo_under], [np.cos(2*ii*pi/num_dir), np.sin(2*ii*pi/num_dir), -1], 0.)
+            vo_unders.add(vo_under)
+            
+            # Next Velocity Overestimate
+            vt_over = network.getNewVariable()
+            network.addEquality([v_x_t_abs, v_y_t_abs, vt_over], [np.cos(2*ii*pi/num_dir), np.sin(2*ii*pi/num_dir), -np.cos(pi/num_dir)], 0.)
+            vt_overs.add(vt_over)
+
+            # Next Distance Underestimate
+            rt_under = network.getNewVariable()
+            network.addEquality([x_t_abs, y_t_abs, rt_under], [np.cos(2*ii*pi/num_dir), np.sin(2*ii*pi/num_dir), -1], 0.)
+            rt_unders.add(rt_under)
+
+        vo_under_best = network.getNewVariable()
+        ro_over_best = network.getNewVariable()
+        rt_under_best = network.getNewVariable()
+        vt_over_best = network.getNewVariable()
+        network.addMaxConstraint(vo_unders, vo_under_best)
+        network.addMaxConstraint(ro_overs, ro_over_best)
+        network.addMaxConstraint(rt_unders, rt_under_best)
+        network.addMaxConstraint(vt_overs, vt_over_best)
+
+
+        # Safe velocity condition should hold for original state
+        network.addInequality([vo_under_best, ro_over_best], [1./error_o, -v_1_const], v_0_const)
+        # Safe velocity condition should break for next state
+        e2 = MarabouUtils.Equation(MarabouCore.Equation.LE)
+        e2.addAddend(-1./error_t, vt_over_best)
+        e2.addAddend(v_1_const, rt_under_best)
+        e2.setScalar(-v_0_const)
+
+        #end velocity checks
+
         #force that when cert <=1
         network.setUpperBound(init_val, self.safe_level)
+
+        #force that when next step is not in docking region
+        e20 = MarabouUtils.Equation(MarabouCore.Equation.GE)
+        e20.addAddend(1.0,x_1)
+        e20.setScalar(docking_threshold_pos)
+
+        e21 = MarabouUtils.Equation(MarabouCore.Equation.GE)
+        e21.addAddend(1.0,y_1)
+        e21.setScalar(docking_threshold_pos)
+
+        e22 = MarabouUtils.Equation(MarabouCore.Equation.LE)
+        e22.addAddend(1.0,x_1)
+        e22.setScalar(-docking_threshold_pos)
+
+        e23 = MarabouUtils.Equation(MarabouCore.Equation.LE)
+        e23.addAddend(1.0,y_1)
+        e23.setScalar(-docking_threshold_pos)
+
+        constraints = [[e20],[e21],[e22],[e23]]
+        network.addDisjunctionConstraint(constraints)
 
         #checking descending condition.
         e1 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e1.addAddend(1.0, init_val)
         e1.addAddend(-1.0, out_val)
-        e1.setScalar(self.descenteps)
+        e1.setScalar(0.0000001)
 
         #force that the cert value decreases
         #network.addEquation(e1)
@@ -105,7 +227,7 @@ class Queries:
         e13.setScalar(-unsafe_threshold_pos)
 
         #maps to either not decreasing or in unsafe region
-        constraints = [[e1], [e6],[e7],[e8],[e9],[e10],[e11],[e12],[e13]]
+        constraints = [[e1], [e2], [e6],[e7],[e8],[e9],[e10],[e11],[e12],[e13]]
         #force that we end up outside the unsafe region
         #ipq = network.getMarabouQuery()
 
@@ -362,7 +484,7 @@ class Queries:
 
         d_x_1, d_y_1, d_v_x_1, d_v_y_1 = encodeDifferences(network, [x_1, y_1, v_x_1, v_y_1], [x_d_1, y_d_1, v_x_d_1, v_y_d_1])
 
-        max_perturbation = 5e-3
+        max_perturbation = 6e-2
 
         network.setUpperBound(d_x_1, max_perturbation)
         network.setUpperBound(d_y_1, max_perturbation)

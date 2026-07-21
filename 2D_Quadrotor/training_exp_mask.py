@@ -31,18 +31,17 @@ class LyapunovNetworkV(nn.Module):
         #dim = 196
         
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(6, 196),   # Wider input layer
+            nn.Linear(6, 128),   # Wider input layer
             nn.ReLU(),
-            nn.Linear(196, 128), # Deeper/wider middle
+            nn.Linear(128, 64), # Deeper/wider middle
             nn.ReLU(),
-            nn.Linear(128, 128), # Deeper/wider middle
+            nn.Linear(64, 64), # Deeper/wider middle
             nn.ReLU(),
-            nn.Linear(128, 64),
+            nn.Linear(64, 32), # Deeper/wider middle
             nn.ReLU(),
-            nn.Linear(64, 1)
-        ).double()
+            nn.Linear(32, 1),
+        )
     def forward(self, x):
-        x = x.double()
         logits = self.linear_relu_stack(x)
         #logits_goal_mask = self.two_dim_docking.goal_mask(x)
         #logits[logits_goal_mask] = -0.1
@@ -52,8 +51,8 @@ class LyapunovNetworkV(nn.Module):
     
 class Quadrator2D():
     def __init__(self):
-        self.st_pos = 1.0
-        self.unsafe_pos = 1.2
+        self.st_pos = 0.1
+        self.unsafe_pos = 0.2
 
         self.dt = 0.05
         self.length=0.25 
@@ -64,21 +63,21 @@ class Quadrator2D():
         self.u_hover = self.mass * self.gravity / 2.0  # scalar
 
         # Overall state-space limits (similar to your env / training setup)
-        self.pos_limit = 1.2             # |px|, |pz| <= 0.3
-        self.theta_limit = 0.6 * math.pi  # |theta| <= 0.35*pi
-        self.vel_limit = 1.5             # |vx|, |vz| <= 2
-        self.omega_limit = 0.9          # |omega| <= ~1.2
+        self.pos_limit = 0.2           # |px|, |pz| <= 0.3
+        self.theta_limit = 0.2 * math.pi  # |theta| <= 0.35*pi
+        self.vel_limit = 0.4             # |vx|, |vz| <= 2
+        self.omega_limit = 0.4          # |omega| <= ~1.2
 
-        self.pos_init = 1.0             # |px|, |pz| <= 0.3
-        self.theta_init = 0.45 * math.pi  # |theta| <= 0.35*pi
-        self.vel_init = 1.2             # |vx|, |vz| <= 2
-        self.omega_init = 0.7          # |omega| <= ~1.2
+        self.pos_init = 0.1             # |px|, |pz| <= 0.3
+        self.theta_init = 0.1 * math.pi  # |theta| <= 0.35*pi
+        self.vel_init = 0.2             # |vx|, |vz| <= 2
+        self.omega_init = 0.2         # |omega| <= ~1.2
 
         # Goal region (small box around hover at origin)
-        self.goal_pos = 0.1              # |px|, |pz| < 0.1
-        self.goal_theta = 0.1            # |theta| < 0.1 rad
-        self.goal_vel = 0.2              # |vx|, |vz| < 0.2
-        self.goal_omega = 0.2            # |omega| < 0.2
+        self.goal_pos = 0.03              # |px|, |pz| < 0.1
+        self.goal_theta = 0.04 * math.pi            # |theta| < 0.1 rad
+        self.goal_vel = 0.05            # |vx|, |vz| < 0.2
+        self.goal_omega = 0.05            # |omega| < 0.2
  
 
     def space_mask(self, x: torch.Tensor) -> torch.Tensor:
@@ -123,7 +122,7 @@ class Quadrator2D():
         """
         Slightly smaller inner goal region for margin.
         """
-        eps = 0.01
+        eps = 0.001
         px, pz, theta, vx, vz, omega = x[:, 0], x[:, 1], x[:, 2], x[:, 3], x[:, 4], x[:, 5]
 
         mask = (px.abs() < self.goal_pos - eps)
@@ -161,44 +160,53 @@ class Quadrator2D():
 
         px, pz, theta, vx, vz, omega = x[:, 0], x[:, 1], x[:, 2], x[:, 3], x[:, 4], x[:, 5]
 
-        margin = 0.1   # width of near-edge unsafe band
+        margin = 0.02   # width of near-edge unsafe band
 
         # Near left/right boundary and moving further outward
         left_unsafe = (
             (px >= -self.pos_limit) &
             (px <= -self.pos_limit + margin) &
-            (vx < 0.0)                     # moving further left
+            (vx < 0)                     # moving further left
             )
 
         right_unsafe = (
             (px <= self.pos_limit) &
             (px >= self.pos_limit - margin) &
-            (vx > 0.0)                     # moving further right
+            (vx > 0)                     # moving further right
             )
 
         # Near bottom boundary (low altitude) and moving downward
         bottom_unsafe = (
             (pz >= -self.pos_limit) & (pz <= -self.pos_limit + margin) &   # near bottom edge
-            (vz < 0.0)                                                   # falling further down
+            (vz < 0)                                                   # falling further down
         )
 
         top_unsafe = (
             (pz <= self.pos_limit) & (pz >= self.pos_limit - margin) &   # near top edge
-            (vz > 0.0)                                                   # rising further up
+            (vz > 0)                                                   # rising further up
         )
 
         # Large tilt near theta limit with angular velocity pushing it further
         left_tilt_unsafe = (
-            (theta >= -self.theta_limit) & (theta <= -self.theta_limit + 0.1) &
+            (theta >= -self.theta_limit) & (theta <= -self.theta_limit + (0.02*math.pi)) &
             (omega < 0.0)
         )
         right_tilt_unsafe = (
-            (theta <= self.theta_limit) & (theta >= self.theta_limit - 0.1) &
+            (theta <= self.theta_limit) & (theta >= self.theta_limit - (0.02*math.pi)) &
             (omega > 0.0)
         )
 
         unsafe_mask = left_unsafe | right_unsafe | bottom_unsafe | top_unsafe | left_tilt_unsafe | right_tilt_unsafe
+
+        # unsafe_mask = abs(px) >= self.unsafe_pos - margin
+        # unsafe_mask.logical_or_(abs(pz) >= self.unsafe_pos - margin)
+        # unsafe_mask.logical_or_(abs(theta) >= self.theta_limit - margin)
+        # unsafe_mask.logical_or_(abs(vx) >= self.vel_limit - margin)
+        # unsafe_mask.logical_or_(abs(vz) >= self.vel_limit - margin)
+        # unsafe_mask.logical_or_(abs(omega) >= self.omega_limit - margin)
+
         unsafe_mask.logical_and_(self.space_mask(x))
+
         return unsafe_mask
 
     def safe_mask(self, x: torch.Tensor) -> torch.Tensor:
@@ -217,12 +225,12 @@ class Quadrator2D():
         px, pz, theta, vx, vz, omega = x[:, 0], x[:, 1], x[:, 2], x[:, 3], x[:, 4], x[:, 5]
 
 
-        mask = (px.abs() <= 1.0)
-        mask.logical_and_(pz.abs() <= 1.0)
-        mask.logical_and_(theta.abs() <= 0.45 * math.pi)
-        mask.logical_and_(vx.abs() <= 1.2)
-        mask.logical_and_(vz.abs() <= 1.2)
-        mask.logical_and_(omega.abs() <= 0.7)
+        mask = (px.abs() <= self.pos_init)
+        mask.logical_and_(pz.abs() <= self.pos_init)
+        mask.logical_and_(theta.abs() <= self.theta_init)
+        mask.logical_and_(vx.abs() <= self.vel_init)
+        mask.logical_and_(vz.abs() <= self.vel_init)
+        mask.logical_and_(omega.abs() <= self.omega_init)
 
         mask.logical_and_(self.nongoal_mask(x))
         mask.logical_and_(self.safe_mask(x))
@@ -242,13 +250,13 @@ class Controller():
         self.t = t
         
         if (isInitial):
-            self.nn = LearnedController().double().to(self.device)
+            self.nn = LearnedController().to(self.device)
             #self.nn.load_state_dict(torch.load(file_name, weights_only=False, map_location=self.device))
             # ckpt = torch.load(file_name, map_location=self.device)
             # self.nn.net.load_state_dict(ckpt["state_dict"])
         else:
             self.nn = torch.load(file_name, weights_only=False, map_location=self.device)
-            self.nn = self.nn.double()
+            self.nn = self.nn
         #self.nn = self.nn.to(device="cuda")
 
         # checking a more elaborate inductive property holds (closer or velocity decreases in appropriate direction)
@@ -259,7 +267,7 @@ class Controller():
     def next_step(self, states, actions=None):
 
 
-        states = states.double()
+        states = states
 
         if actions is None:
             actions = self.nn(states)
@@ -268,7 +276,7 @@ class Controller():
 
         
         # delta-around-hover controller
-        u = torch.clamp(u_hover_vec + actions, 0.0, 15.0)
+        u = torch.clamp(u_hover_vec + actions, 0.0, 6.0)
         
         input = torch.cat((states, u), 1)
 
@@ -286,12 +294,8 @@ class Dynamic(nn.Module):
             nn.ReLU(),
             nn.Linear(64, 64),
             nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, 6) # output: next_state
-        ).double()
+            nn.Linear(64, 6), # output: next_state
+        )
         
         self.nn.load_state_dict(torch.load(file_name))
 
@@ -303,7 +307,7 @@ class Dynamic(nn.Module):
 
 #num_points = 10000000
 class SampleData(pl.LightningDataModule):
-    def __init__(self, train_file_name, val_file_name, env, device="cpu", num_points = 3000000, dim = 6, val_split = 0.1, batch_size = 10000, max_tries = 5000):
+    def __init__(self, train_file_name, val_file_name, env, device="cpu", num_points = 10000000, dim = 6, val_split = 0.1, batch_size = 10000, max_tries = 5000):
         super().__init__()
         self.num_points = num_points
         self.env = env
@@ -317,15 +321,15 @@ class SampleData(pl.LightningDataModule):
         self.device = device
 
         for _ in range(2):
-            self.ranges.append([-self.env.unsafe_pos-0.01, self.env.unsafe_pos+0.01])
+            self.ranges.append([-self.env.unsafe_pos-0.02, self.env.unsafe_pos+0.02])
 
-        self.ranges.append([-self.env.theta_limit-0.01, self.env.theta_limit+0.01])
+        self.ranges.append([-self.env.theta_limit-0.02, self.env.theta_limit+0.02])
 
         for _ in range(2):
             #ranges.append([-self.vel_limit,self.vel_limit])
-            self.ranges.append([-self.env.vel_limit-0.01,self. env.vel_limit+0.01])
+            self.ranges.append([-self.env.vel_limit-0.02,self. env.vel_limit+0.02])
 
-        self.ranges.append([-self.env.omega_limit-0.01, self.env.omega_limit+0.01])
+        self.ranges.append([-self.env.omega_limit-0.02, self.env.omega_limit+0.02])
         
     '''
     def safe_mask(self, x):
@@ -346,7 +350,7 @@ class SampleData(pl.LightningDataModule):
 
 
         # init 
-        y = torch.Tensor(int(self.num_points*0.15), self.dim).uniform_(
+        y = torch.Tensor(int(self.num_points//5), self.dim).uniform_(
             0.0, 1.0
         )
 
@@ -361,20 +365,20 @@ class SampleData(pl.LightningDataModule):
         y[:, 5] = y[:, 5] * (self.env.omega_init - (-self.env.omega_init)) + (-self.env.omega_init)
 
 
-        # close to goal
-        z = torch.Tensor(int(self.num_points*0.05), self.dim).uniform_(
-            0.0, 1.0
-        )
-        # Small position ±0.15m
-        z[:, 0:2] = z[:, 0:2] * 0.3 - 0.15
-        # Small theta ±0.15 rad
-        z[:, 2] = z[:, 2] * 0.3 - 0.15
-        # Small velocity ±0.3 m/s
-        z[:, 3:5] = z[:, 3:5] * 0.6 - 0.3
-        # Small omega ±0.3 rad/s
-        z[:, 5] = z[:, 5] * 0.6 - 0.3
+        # # close to goal
+        # z = torch.Tensor(int(self.num_points*0.05), self.dim).uniform_(
+        #     0.0, 1.0
+        # )
+        # # Small position ±0.15m
+        # z[:, 0:2] = z[:, 0:2] * 0.3 - 0.15
+        # # Small theta ±0.15 rad
+        # z[:, 2] = z[:, 2] * 0.3 - 0.15
+        # # Small velocity ±0.3 m/s
+        # z[:, 3:5] = z[:, 3:5] * 0.6 - 0.3
+        # # Small omega ±0.3 rad/s
+        # z[:, 5] = z[:, 5] * 0.6 - 0.3
 
-        x = torch.cat((x,y,z))
+        x = torch.cat((x,y))
         
         '''
         #confirm data is safe to begin with
@@ -412,19 +416,32 @@ class SampleData(pl.LightningDataModule):
             min_val, max_val = self.ranges[i]
             x[:, i] = x[:, i] * (max_val - min_val) + min_val
 
-        y = torch.Tensor(self.num_points//50, self.dim).uniform_(
+        y = torch.Tensor(int(self.num_points//50), self.dim).uniform_(
             0.0, 1.0
         )
 
         for i in range(2):
             y[:, i] = y[:, i] * (self.env.st_pos - (-self.env.st_pos)) + (-self.env.st_pos)
 
-        y[:, 2] = y[:, 2] * (self.env.theta_limit - (-self.env.theta_limit)) + (-self.env.theta_limit)
+        y[:, 2] = y[:, 2] * (self.env.theta_init - (-self.env.theta_init)) + (-self.env.theta_init)
 
         for j in range(2):
-            y[:, j+3] = y[:, j+3] * (self.env.vel_limit - (-self.env.vel_limit)) + (-self.env.vel_limit)
+            y[:, j+3] = y[:, j+3] * (self.env.vel_init - (-self.env.vel_init)) + (-self.env.vel_init)
 
-        y[:, 5] = y[:, 5] * (self.env.omega_limit - (-self.env.omega_limit)) + (-self.env.omega_limit)
+        y[:, 5] = y[:, 5] * (self.env.omega_init - (-self.env.omega_init)) + (-self.env.omega_init)
+
+        #  # close to goal
+        # z = torch.Tensor(int(self.num_points*0.005), self.dim).uniform_(
+        #     0.0, 1.0
+        # )
+        # # Small position ±0.15m
+        # z[:, 0:2] = z[:, 0:2] * 0.3 - 0.15
+        # # Small theta ±0.15 rad
+        # z[:, 2] = z[:, 2] * 0.3 - 0.15
+        # # Small velocity ±0.3 m/s
+        # z[:, 3:5] = z[:, 3:5] * 0.6 - 0.3
+        # # Small omega ±0.3 rad/s
+        # z[:, 5] = z[:, 5] * 0.6 - 0.3
 
         x = torch.cat((x,y))
 
@@ -480,7 +497,7 @@ class SampleData(pl.LightningDataModule):
     
 
 class Trainer(pl.LightningModule):
-    def __init__(self, model, V, controller, datamodule, out_model, out_controller, out_timing, threshold, primal_learning_rate = 1e-3, goalfactor = 1, decreasefactor = 1, nongoalfactor = 1, goaleps=1e-4, nongoaleps=1e-4, descenteps=1e-4, safe_level = 1, safe_factor = 1e2, unsafe_factor = 1e2,  eps = 1e-5):
+    def __init__(self, model, V, controller, datamodule, out_model, out_controller, out_timing, threshold, primal_learning_rate = 1e-3, goalfactor = 1, decreasefactor = 10, nongoalfactor = 1, goaleps=1e-4, nongoaleps=1e-4, descenteps=1e-3, safe_level = 1, safe_factor = 1, unsafe_factor = 1e2,  eps = 1e-5):
         super().__init__()
         self.automatic_optimization = False
         self.epoch = 0
@@ -551,40 +568,40 @@ class Trainer(pl.LightningModule):
         else:
             safe_violation = F.relu(
                 self.eps + V_init_nongoal - self.safe_level)
-            valid_violation = F.relu(self.eps - V_init_nongoal)
+            #valid_violation = F.relu(self.eps - V_init_nongoal)
             safe_term = self.safe_factor * \
-                (safe_violation.mean() + valid_violation.mean())
+                (safe_violation.mean())
 
         return safe_term
     
-    def goal_loss(self, x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask):
-        V = self.V(x)
+    # def goal_loss(self, x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask):
+    #     V = self.V(x)
         
-        # Only apply to states in goal region
-        V_goal = V[goal_mask]
+    #     # Only apply to states in goal region
+    #     V_goal = V[goal_mask]
         
-        if len(V_goal) == 0:
-            goal_term = 0.0
-        else:
-            # Push V ≤ -0.05 in goal (strong negative for clear sublevel set)
-            goal_violation = F.relu(V_goal + self.eps)
-            goal_term = self.goalfactor * goal_violation.mean()
+    #     if len(V_goal) == 0:
+    #         goal_term = 0.0
+    #     else:
+    #         # Push V ≤ -0.05 in goal (strong negative for clear sublevel set)
+    #         goal_violation = F.relu(V_goal + self.eps)
+    #         goal_term = self.goalfactor * goal_violation.mean()
         
-        return goal_term
+    #     return goal_term
     
-    def maximize_in_neighborhood(self, x0, epsilon, alpha=0.001, steps=30, norm="linf"):
-        x = x0.detach()
-        x = x + torch.zeros_like(x).uniform_(-epsilon, epsilon)
-        for i in range(steps):
-            x.requires_grad_()
-            with torch.enable_grad():
-                V_value = self.V(x)
-                loss = V_value.sum()
-            grad = torch.autograd.grad(loss, [x])[0]
-            x = x.detach() + alpha * torch.sign(grad.detach())
-            x = torch.min(torch.max(x, x0 - epsilon), x0 + epsilon)
-            x = torch.clamp(x, -0.3, 0.3)
-        return x
+    # def maximize_in_neighborhood(self, x0, epsilon, alpha=0.001, steps=30, norm="linf"):
+    #     x = x0.detach()
+    #     x = x + torch.zeros_like(x).uniform_(-epsilon, epsilon)
+    #     for i in range(steps):
+    #         x.requires_grad_()
+    #         with torch.enable_grad():
+    #             V_value = self.V(x)
+    #             loss = V_value.sum()
+    #         grad = torch.autograd.grad(loss, [x])[0]
+    #         x = x.detach() + alpha * torch.sign(grad.detach())
+    #         x = torch.min(torch.max(x, x0 - epsilon), x0 + epsilon)
+    #         x = torch.clamp(x, -0.3, 0.3)
+    #     return x
 
 
     def descent_loss(self, x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask):
@@ -698,64 +715,64 @@ class Trainer(pl.LightningModule):
 
         return descent_term
     
-    def l2_reg_loss(self, l2_reg_upper=20):
-        reg_loss = None
-        for param in self.V.parameters():
-            if reg_loss is None:
-                reg_loss = torch.sum(param**2)
-            else:
-                reg_loss = reg_loss + param.norm(2)**2
-        return 0.0005*max(reg_loss-l2_reg_upper, 0)
+    # def l2_reg_loss(self, l2_reg_upper=20):
+    #     reg_loss = None
+    #     for param in self.V.parameters():
+    #         if reg_loss is None:
+    #             reg_loss = torch.sum(param**2)
+    #         else:
+    #             reg_loss = reg_loss + param.norm(2)**2
+    #     return 0.0005*max(reg_loss-l2_reg_upper, 0)
     
-    def global_lipschitz_loss(self, global_lip_upper=3):
-        L2_product = 1
-        for param in self.V.parameters():  # Iterate directly over parameters
-            if param.ndim > 1:  # Only process weight matrices (ignore biases)
-                # Use differentiable SVD
-                U, S, V = torch.linalg.svd(param, full_matrices=False)
-                spectral_norm = S[0]  # Largest singular value (spectral norm)
-                L2_product *= spectral_norm
-        return max(L2_product-global_lip_upper, 0)
+    # def global_lipschitz_loss(self, global_lip_upper=3):
+    #     L2_product = 1
+    #     for param in self.V.parameters():  # Iterate directly over parameters
+    #         if param.ndim > 1:  # Only process weight matrices (ignore biases)
+    #             # Use differentiable SVD
+    #             U, S, V = torch.linalg.svd(param, full_matrices=False)
+    #             spectral_norm = S[0]  # Largest singular value (spectral norm)
+    #             L2_product *= spectral_norm
+    #     return max(L2_product-global_lip_upper, 0)
 
-    def global_lipschitz_calculate(self):
-        L2_product = 1.0
-        # Disable gradient tracking for this computation
-        with torch.no_grad():
-            for param in self.V.parameters():
-                # Process weight matrices only (ignore biases)
-                if param.ndim > 1:
-                    U, S, V = torch.linalg.svd(param, full_matrices=False)
-                    # Extract largest singular value as a float
-                    spectral_norm = S[0].item()
-                    L2_product *= spectral_norm
-        return L2_product
+    # def global_lipschitz_calculate(self):
+    #     L2_product = 1.0
+    #     # Disable gradient tracking for this computation
+    #     with torch.no_grad():
+    #         for param in self.V.parameters():
+    #             # Process weight matrices only (ignore biases)
+    #             if param.ndim > 1:
+    #                 U, S, V = torch.linalg.svd(param, full_matrices=False)
+    #                 # Extract largest singular value as a float
+    #                 spectral_norm = S[0].item()
+    #                 L2_product *= spectral_norm
+    #     return L2_product
     
-    def l2_reg_calculate(self):
-        l2_sum = 0.0
-        with torch.no_grad():  # Disable gradients if you don't need them
-            for param in self.V.parameters():
-                # Sum of squared weights
-                l2_sum += torch.sum(param ** 2).item()
-        return l2_sum
+    # def l2_reg_calculate(self):
+    #     l2_sum = 0.0
+    #     with torch.no_grad():  # Disable gradients if you don't need them
+    #         for param in self.V.parameters():
+    #             # Sum of squared weights
+    #             l2_sum += torch.sum(param ** 2).item()
+    #     return l2_sum
     
-    def step_length_loss(self, x):
-        safe_mask = self.model.safe_mask(x)
-        nongoal_mask = self.model.nongoal_mask(x)
-        x = x[safe_mask & nongoal_mask]
-        x_next = self.controller.next_step(x)
-        step_length = torch.max(
-            torch.abs(torch.abs(x_next) - torch.abs(x)), dim=1).values
-        sl_term = F.relu(0.011-step_length.min())
-        return sl_term
+    # def step_length_loss(self, x):
+    #     safe_mask = self.model.safe_mask(x)
+    #     nongoal_mask = self.model.nongoal_mask(x)
+    #     x = x[safe_mask & nongoal_mask]
+    #     x_next = self.controller.next_step(x)
+    #     step_length = torch.max(
+    #         torch.abs(torch.abs(x_next) - torch.abs(x)), dim=1).values
+    #     sl_term = F.relu(0.011-step_length.min())
+    #     return sl_term
 
 
     def training_step(self, batch, batch_idx):
         x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask = batch
-        _, lc = self.compute_lipschitz_constant("global")
+        #_, lc = self.compute_lipschitz_constant("global")
         torch.set_grad_enabled(True)
-        self.goal_factor = 1
-        self.decreasefactor = 1
-        self.safe_factor = 1
+        # self.goal_factor = 1
+        # self.decreasefactor = 1
+        # self.safe_factor = 1
         # if self.epoch <= 5:  # vallina: 2; lip: 4
         #     self.safe_factor = 1e2
         #     self.decreasefactor = 1
@@ -764,13 +781,13 @@ class Trainer(pl.LightningModule):
         #     self.decreasefactor = 1e2
         init_term = self.init_loss(
             x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask)
-        goal_term = self.goal_loss(
-            x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask)
+        # goal_term = self.goal_loss(
+        #     x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask)
         descent_term = self.descent_loss(
             x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask)
 
 
-        goal_term = 0
+        goal_term = 0.0
         l2_reg_term = 0.0
         lip_term = 0.0
         sl_term = 0.0
@@ -780,12 +797,12 @@ class Trainer(pl.LightningModule):
         # l2_reg_term = self.l2_reg_loss()
         # sl_term = self.step_length_loss(x)
         total_loss = descent_term + init_term + goal_term + lip_term + l2_reg_term + sl_term
-        if batch_idx % 100 == 0:
-            lip_term = self.global_lipschitz_calculate()
-            l2_reg_term = self.l2_reg_calculate()
-            print(lip_term, l2_reg_term, init_term,
-                  descent_term)
-            print(total_loss)
+        # if batch_idx % 100 == 0:
+        #     lip_term = self.global_lipschitz_calculate()
+        #     l2_reg_term = self.l2_reg_calculate()
+        #     print(lip_term, l2_reg_term, init_term,
+        #           descent_term)
+        #     print(total_loss)
 
         opt_v, opt_c, opt_a = self.optimizers()
 
@@ -794,7 +811,7 @@ class Trainer(pl.LightningModule):
                 opt_v.zero_grad()
                 self.manual_backward(total_loss)
                 opt_v.step()
-            elif 5 <= self.epoch < 10:  # vallina: 2,3; lip-neighbor: 11,15
+            elif 5 <= self.epoch <= 10:  # vallina: 2,3; lip-neighbor: 11,15
                 opt_c.zero_grad()
                 self.manual_backward(descent_term)
                 opt_c.step()
@@ -809,19 +826,19 @@ class Trainer(pl.LightningModule):
 
         batch_dict = {"loss": total_loss}
         self.losses_train.append(total_loss)
-        self.lcs.append(lc)
+        #self.lcs.append(lc)
         self.init_losses_train.append(init_term)
-        self.goal_losses_train.append(goal_term)
+        #self.goal_losses_train.append(goal_term)
         self.descent_losses_train.append(descent_term)
         return batch_dict
 
     def validation_step(self, batch, batch_idx):
         x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask = batch
-        _, lc = self.compute_lipschitz_constant("global")
+        #_, lc = self.compute_lipschitz_constant("global")
         init_term = self.init_loss(
             x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask)
-        goal_term = self.goal_loss(
-            x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask)
+        # goal_term = self.goal_loss(
+        #     x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask)
         descent_term = self.descent_loss(
             x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask)
         
@@ -834,7 +851,7 @@ class Trainer(pl.LightningModule):
         self.losses_val.append(total_loss)
         self.init_losses_val.append(init_term)
         self.descent_losses_val.append(descent_term)
-        self.goal_losses_val.append(goal_term)
+        #self.goal_losses_val.append(goal_term)
         return batch_dict
     
     def on_train_epoch_end(self):
@@ -843,28 +860,33 @@ class Trainer(pl.LightningModule):
         total = 0
         init = 0
         descent = 0
-        goal = 0
+        #goal = 0
         # gross = 0
         for i in range(len(self.losses_train)):
             total += self.losses_train[i]
             init += self.init_losses_train[i]
             descent += self.descent_losses_train[i]
-            goal += self.goal_losses_train[i]
+            #goal += self.goal_losses_train[i]
 
         print("Current loss: ", total/len(self.losses_train))
         print("Init loss: ", init/len(self.losses_train))
         print("Descent loss: ", descent/len(self.losses_train))
-        print("Goal loss: ", goal/len(self.losses_train))
+        #print("Goal loss: ", goal/len(self.losses_train))
         print("Total loss:", total)
         # self.log("step_loss", descent/len(self.losses_train))
         # torch.save(self.V, self.out_model)
         # torch.save(self.controller.nn, self.out_controller)
-        lc = self.lcs[-1]
+        #lc = self.lcs[-1]
         with open(self.out_timing, 'a') as f:
-            f.write("total loss: " + str(total) + " " + "lc" + str(lc) + "\n")
+            f.write("total loss: " + str(total) + " "  + "\n")
         # print("Gross: ", gross/len(self.losses_train))
 
-        lc = self.lcs[-1]
+        # if self.epoch!=0 and self.epoch%30==0:
+        #     torch.save(self.V, self.out_model)
+        #     torch.save(self.controller.nn, self.out_controller)
+        #     self.log("saved_loss", torch.tensor(0, dtype=torch.float32))
+
+       # lc = self.lcs[-1]
         if (total.item() <= self.threshold):
             #     print("total loss is 0")
             #     with open('log_d001.txt', 'a') as f:
@@ -897,56 +919,56 @@ class Trainer(pl.LightningModule):
         self.losses_train = []
         self.init_losses_train = []
         self.descent_losses_train = []
-        self.goal_losses_train = []
-        self.lcs = []
+        #self.goal_losses_train = []
+       # self.lcs = []
 
-    def compute_lipschitz_constant(self, type="global", x=None, r=None):
-        """Compute the Lipschitz constant based on your criteria."""
-        if type == "global":
-            L2_product = torch.tensor(1.0)
-            for param in self.V.parameters():  # Iterate directly over parameters
-                # Only process weight matrices (ignore biases)
-                if param.ndim > 1:
-                    # Differentiable SVD
-                    U, S, V = torch.linalg.svd(param, full_matrices=False)
-                    # Largest singular value (spectral norm)
-                    spectral_norm = S[0]
-                    L2_product = L2_product * spectral_norm
-            return "global", L2_product
-        elif type == "local":
-            num_samples = 100
-            n, d = x.shape
+    # def compute_lipschitz_constant(self, type="global", x=None, r=None):
+    #     """Compute the Lipschitz constant based on your criteria."""
+    #     if type == "global":
+    #         L2_product = torch.tensor(1.0)
+    #         for param in self.V.parameters():  # Iterate directly over parameters
+    #             # Only process weight matrices (ignore biases)
+    #             if param.ndim > 1:
+    #                 # Differentiable SVD
+    #                 U, S, V = torch.linalg.svd(param, full_matrices=False)
+    #                 # Largest singular value (spectral norm)
+    #                 spectral_norm = S[0]
+    #                 L2_product = L2_product * spectral_norm
+    #         return "global", L2_product
+    #     elif type == "local":
+    #         num_samples = 100
+    #         n, d = x.shape
 
-            noise = torch.empty(n, num_samples, d).uniform_(-1, 1)
-            noise /= torch.amax(torch.abs(noise), dim=-1,
-                                keepdim=True)
-            x_prime = x[:, None, :] + noise * r
-            f_x = self.V(x[:, None, :])
-            f_x_prime = self.V(x_prime)
-            diff = torch.amax(torch.abs(f_x - f_x_prime),
-                              dim=-1)  # (n, num_samples)
-            denom = torch.amax(torch.abs(noise * r), dim=-1)
+    #         noise = torch.empty(n, num_samples, d).uniform_(-1, 1)
+    #         noise /= torch.amax(torch.abs(noise), dim=-1,
+    #                             keepdim=True)
+    #         x_prime = x[:, None, :] + noise * r
+    #         f_x = self.V(x[:, None, :])
+    #         f_x_prime = self.V(x_prime)
+    #         diff = torch.amax(torch.abs(f_x - f_x_prime),
+    #                           dim=-1)  # (n, num_samples)
+    #         denom = torch.amax(torch.abs(noise * r), dim=-1)
 
-            lipschitz_ratios = diff / denom
+    #         lipschitz_ratios = diff / denom
 
-            return "local", lipschitz_ratios
+    #         return "local", lipschitz_ratios
     
     def on_validation_epoch_end(self):
         # generate new data and also plot before (TODO)
         total = 0
         init = 0
         descent = 0
-        goal = 0
+        #goal = 0
         for i in range(len(self.losses_val)):
             total += self.losses_val[i]
             init += self.init_losses_val[i]
             descent += self.descent_losses_val[i]
-            goal += self.goal_losses_val[i]
+            #goal += self.goal_losses_val[i]
 
         print("Current loss: ", total/len(self.losses_val))
         print("Init loss: ", init/len(self.losses_val))
         print("Descent loss: ", descent/len(self.losses_val))
-        print("Goal loss: ", goal/len(self.losses_val))
+       # print("Goal loss: ", goal/len(self.losses_val))
 
         self.losses_val = []
         self.init_losses_val = []
@@ -963,13 +985,14 @@ class Trainer(pl.LightningModule):
 
         optimizer_together = torch.optim.Adam(
             list(self.V.parameters()) + list(self.controller.nn.parameters()), lr=self.primal_learning_rate)
+        
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer_controller, mode='min', factor=0.1, patience=10
+            optimizer_together, mode='min', factor=0.1, patience=10
         )
         return [optimizer_V, optimizer_controller, optimizer_together], [{"scheduler": scheduler, "monitor": "loss"}]
 
 class SampleDataRetrain(pl.LightningDataModule):
-    def __init__(self, epoch, two_dim_docking, V, controller, datapoints, counterexample_ranges, in_train_file, in_traj_file, train_file, val_file, traj_file, counterexample_folder, num_dpoints, num_points=3000000, dim=2, val_split=0.1, batch_size=10000, max_tries=5000, safe_level=1, is_traj=False):
+    def __init__(self, epoch, two_dim_docking, V, controller, datapoints, counterexample_ranges, in_train_file, in_traj_file, train_file, val_file, traj_file, counterexample_folder, num_dpoints, num_points=10000000, dim=2, val_split=0.1, batch_size=10000, max_tries=5000, safe_level=1, is_traj=False):
         super().__init__()
         self.epoch = epoch
         self.num_points = num_points
@@ -997,15 +1020,15 @@ class SampleDataRetrain(pl.LightningDataModule):
         self.is_traj = is_traj
 
         for _ in range(2):
-            self.ranges.append([-self.env.unsafe_pos-0.01, self.env.unsafe_pos+0.01])
+            self.ranges.append([-self.env.unsafe_pos-0.02, self.env.unsafe_pos+0.02])
 
-        self.ranges.append([-self.env.theta_limit-0.01, self.env.theta_limit+0.01])
+        self.ranges.append([-self.env.theta_limit-0.02, self.env.theta_limit+0.02])
 
         for _ in range(2):
             #ranges.append([-self.vel_limit,self.vel_limit])
-            self.ranges.append([-self.env.vel_limit-0.01,self. env.vel_limit+0.01])
+            self.ranges.append([-self.env.vel_limit-0.02,self. env.vel_limit+0.02])
 
-        self.ranges.append([-self.env.omega_limit-0.01, self.env.omega_limit+0.01])
+        self.ranges.append([-self.env.omega_limit-0.02, self.env.omega_limit+0.02])
         
 
     def prepare_data(self):
@@ -1063,14 +1086,14 @@ class SampleDataRetrain(pl.LightningDataModule):
                     num_added//len(self.counterexamples), self.dim).uniform_(0.0, 1.0)
                 
                 for j in range(2):
-                    new_points[:, j] = new_points[:, j] * (0.05) + self.counterexamples[i][j] - 0.025
+                    new_points[:, j] = new_points[:, j] * (0.04) + self.counterexamples[i][j] - 0.02
 
-                new_points[:, 2] = new_points[:, 2] * (0.05) + self.counterexamples[i][j] - 0.025
+                new_points[:, 2] = new_points[:, 2] * (0.04) + self.counterexamples[i][j] - 0.02
 
                 for j in range(2):
-                    new_points[:, j+3] = new_points[:, j+3] * (0.05) + self.counterexamples[i][j+2] - 0.025
+                    new_points[:, j+3] = new_points[:, j+3] * (0.04) + self.counterexamples[i][j+2] - 0.02
                 
-                new_points[:, 5] = new_points[:, 5] * (0.05) + self.counterexamples[i][j] - 0.025 
+                new_points[:, 5] = new_points[:, 5] * (0.04) + self.counterexamples[i][j] - 0.02 
 
 
                 # x_train = torch.cat((x_train,new_points))
@@ -1236,7 +1259,7 @@ class SampleDataRetrain(pl.LightningDataModule):
         return DataLoader(
             self.training_data,
             batch_size=self.batch_size,
-            num_workers=10,
+            num_workers=0,
             shuffle=True
         )
 
@@ -1245,13 +1268,13 @@ class SampleDataRetrain(pl.LightningDataModule):
         return DataLoader(
             self.validation_data,
             batch_size=self.batch_size,
-            num_workers=10,
+            num_workers=0,
             shuffle=True
         )
 
 
 class TrainerRetrain(pl.LightningModule):
-    def __init__(self, model, V, controller, datamodule, out_model, out_controller, out_timing, threshold, primal_learning_rate=1e-4, goalfactor=1, decreasefactor=1e1, nongoalfactor=1, goaleps=1e-4, nongoaleps=1e-4, descenteps=5e-5, safe_level=1, safe_factor=1, unsafe_factor=1e2, eps=1e-5):
+    def __init__(self, model, V, controller, datamodule, out_model, out_controller, out_timing, threshold, primal_learning_rate=1e-4, goalfactor=1, decreasefactor=1e1, nongoalfactor=1, goaleps=1e-4, nongoaleps=1e-4, descenteps=1e-3, safe_level=1, safe_factor=1, unsafe_factor=1e2, eps=1e-5):
         super().__init__()
         self.epoch = 0
         self.automatic_optimization = False
@@ -1365,42 +1388,42 @@ class TrainerRetrain(pl.LightningModule):
 
         return safe_term
     
-    def goal_loss(self, x, x_c, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask, init_mask_c, goal_mask_c, nongoal_mask_c, safe_mask_c, unsafe_mask_c):
-        V = self.V(x)
+    # def goal_loss(self, x, x_c, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask, init_mask_c, goal_mask_c, nongoal_mask_c, safe_mask_c, unsafe_mask_c):
+    #     V = self.V(x)
         
-        # Only apply to states in goal region
-        V_goal = V[goal_mask]
+    #     # Only apply to states in goal region
+    #     V_goal = V[goal_mask]
         
-        if len(V_goal) == 0:
-            goal_term = 0.0
-        else:
-            # Push V ≤ -0.05 in goal (strong negative for clear sublevel set)
-            goal_violation = F.relu(V_goal + self.eps)
-            goal_term = self.goalfactor * goal_violation.mean()
+    #     if len(V_goal) == 0:
+    #         goal_term = 0.0
+    #     else:
+    #         # Push V ≤ -0.05 in goal (strong negative for clear sublevel set)
+    #         goal_violation = F.relu(V_goal + self.eps)
+    #         goal_term = self.goalfactor * goal_violation.mean()
         
-        if len(x_c) != 0:
-            V_c = self.V(x_c)
-            V_goal_c = V_c[goal_mask_c]
-            if len(V_goal_c) > 0:
-                goal_violation_c = F.relu(V_goal_c + self.eps)
-                goal_term_c = self.goalfactor * 100 * goal_violation_c.mean()
-                goal_term += goal_term_c
+    #     if len(x_c) != 0:
+    #         V_c = self.V(x_c)
+    #         V_goal_c = V_c[goal_mask_c]
+    #         if len(V_goal_c) > 0:
+    #             goal_violation_c = F.relu(V_goal_c + self.eps)
+    #             goal_term_c = self.goalfactor * 100 * goal_violation_c.mean()
+    #             goal_term += goal_term_c
 
-        return goal_term
+    #     return goal_term
 
-    def maximize_in_neighborhood(self, x0, epsilon, alpha=0.001, steps=30, norm="linf"):
-        x = x0.detach()
-        x = x + torch.zeros_like(x).uniform_(-epsilon, epsilon)
-        for i in range(steps):
-            x.requires_grad_()
-            with torch.enable_grad():
-                V_value = self.V(x)
-                loss = V_value.sum()
-            grad = torch.autograd.grad(loss, [x])[0]
-            x = x.detach() + alpha * torch.sign(grad.detach())
-            x = torch.min(torch.max(x, x0 - epsilon), x0 + epsilon)
-            x = torch.clamp(x, -0.5, 0.5)
-        return x
+    # def maximize_in_neighborhood(self, x0, epsilon, alpha=0.001, steps=30, norm="linf"):
+    #     x = x0.detach()
+    #     x = x + torch.zeros_like(x).uniform_(-epsilon, epsilon)
+    #     for i in range(steps):
+    #         x.requires_grad_()
+    #         with torch.enable_grad():
+    #             V_value = self.V(x)
+    #             loss = V_value.sum()
+    #         grad = torch.autograd.grad(loss, [x])[0]
+    #         x = x.detach() + alpha * torch.sign(grad.detach())
+    #         x = torch.min(torch.max(x, x0 - epsilon), x0 + epsilon)
+    #         x = torch.clamp(x, -0.5, 0.5)
+    #     return x
 
     def descent_loss(self, x, x_c, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask, init_mask_c, goal_mask_c, nongoal_mask_c, safe_mask_c, unsafe_mask_c, traj_mask):
         x = x[nongoal_mask & safe_mask]
@@ -1604,7 +1627,7 @@ class TrainerRetrain(pl.LightningModule):
                 # d = 0.001
                 # _, lc = self.compute_lipschitz_constant("global")
                 descent_violation_c = F.relu(
-                    self.descenteps + (V_next_c - V_nongoal_c)/ self.controller.t)
+                    self.descenteps + (V_next_c - V_nongoal_c))
 
                 #######
                 # V_next_c[descent_violation_c >
@@ -1619,93 +1642,93 @@ class TrainerRetrain(pl.LightningModule):
 
         return descent_term
 
-    def l2_reg_loss(self, l2_reg_upper=20):
-        reg_loss = None
-        for param in self.V.parameters():
-            if reg_loss is None:
-                reg_loss = torch.sum(param**2)
-            else:
-                reg_loss = reg_loss + param.norm(2)**2
-        return 0.0005*max(reg_loss-l2_reg_upper, 0)
+    # def l2_reg_loss(self, l2_reg_upper=20):
+    #     reg_loss = None
+    #     for param in self.V.parameters():
+    #         if reg_loss is None:
+    #             reg_loss = torch.sum(param**2)
+    #         else:
+    #             reg_loss = reg_loss + param.norm(2)**2
+    #     return 0.0005*max(reg_loss-l2_reg_upper, 0)
 
-    def local_lipschitz_loss(self, x, x_c, local_lip_upper=0.5):
-        num_samples = 1000
-        r = 0.01
-        n, d = x.shape
-        # Generate noise and normalize using L-infinity norm
-        noise = torch.empty(n, num_samples, d).uniform_(-1, 1)
-        noise /= torch.amax(torch.abs(noise), dim=-1,
-                            keepdim=True)
-        x_prime = x[:, None, :] + noise * r
-        f_x = self.V(x[:, None, :])
-        f_x_prime = self.V(x_prime)
-        diff = torch.amax(torch.abs(f_x - f_x_prime),
-                          dim=-1)  # (n, num_samples)
-        denom = torch.amax(torch.abs(noise * r), dim=-1)
+    # def local_lipschitz_loss(self, x, x_c, local_lip_upper=0.5):
+    #     num_samples = 1000
+    #     r = 0.01
+    #     n, d = x.shape
+    #     # Generate noise and normalize using L-infinity norm
+    #     noise = torch.empty(n, num_samples, d).uniform_(-1, 1)
+    #     noise /= torch.amax(torch.abs(noise), dim=-1,
+    #                         keepdim=True)
+    #     x_prime = x[:, None, :] + noise * r
+    #     f_x = self.V(x[:, None, :])
+    #     f_x_prime = self.V(x_prime)
+    #     diff = torch.amax(torch.abs(f_x - f_x_prime),
+    #                       dim=-1)  # (n, num_samples)
+    #     denom = torch.amax(torch.abs(noise * r), dim=-1)
 
-        lipschitz_ratios = diff / denom
+    #     lipschitz_ratios = diff / denom
 
-        # Compute max_violation
-        max_violation = torch.maximum(
-            lipschitz_ratios - local_lip_upper, torch.tensor(0.0)).mean()
-        if len(x_c) != 0:
-            num_samples_c = 10000
-            r = 0.01
+    #     # Compute max_violation
+    #     max_violation = torch.maximum(
+    #         lipschitz_ratios - local_lip_upper, torch.tensor(0.0)).mean()
+    #     if len(x_c) != 0:
+    #         num_samples_c = 10000
+    #         r = 0.01
 
-            n, d = x_c.shape
+    #         n, d = x_c.shape
 
-            # Generate noise and normalize using L-infinity norm
-            noise = torch.empty(n, num_samples_c, d).uniform_(-1, 1)
-            noise /= torch.amax(torch.abs(noise), dim=-1,
-                                keepdim=True)
-            x_c_prime = x_c[:, None, :] + noise * r
-            f_x_c = self.V(x_c[:, None, :])
-            f_x_c_prime = self.V(x_c_prime)
-            diff = torch.amax(torch.abs(f_x_c - f_x_c_prime),
-                              dim=-1)  # (n, num_samples)
-            denom = torch.amax(torch.abs(noise * r), dim=-1)
-            assert denom.any() != 0
+    #         # Generate noise and normalize using L-infinity norm
+    #         noise = torch.empty(n, num_samples_c, d).uniform_(-1, 1)
+    #         noise /= torch.amax(torch.abs(noise), dim=-1,
+    #                             keepdim=True)
+    #         x_c_prime = x_c[:, None, :] + noise * r
+    #         f_x_c = self.V(x_c[:, None, :])
+    #         f_x_c_prime = self.V(x_c_prime)
+    #         diff = torch.amax(torch.abs(f_x_c - f_x_c_prime),
+    #                           dim=-1)  # (n, num_samples)
+    #         denom = torch.amax(torch.abs(noise * r), dim=-1)
+    #         assert denom.any() != 0
 
-            lipschitz_ratios = diff / denom
+    #         lipschitz_ratios = diff / denom
 
-            # Compute max_violation
-            max_violation_c = torch.maximum(
-                lipschitz_ratios - local_lip_upper, torch.tensor(0.0)).mean()
+    #         # Compute max_violation
+    #         max_violation_c = torch.maximum(
+    #             lipschitz_ratios - local_lip_upper, torch.tensor(0.0)).mean()
 
-            # Sum over all samples
-            max_violation += max_violation_c
-        return max_violation
+    #         # Sum over all samples
+    #         max_violation += max_violation_c
+    #     return max_violation
 
-    def global_lipschitz_loss(self, global_lip_upper=3):
-        L2_product = 1
-        for param in self.V.parameters():  # Iterate directly over parameters
-            if param.ndim > 1:  # Only process weight matrices (ignore biases)
-                # Use differentiable SVD
-                U, S, V = torch.linalg.svd(param, full_matrices=False)
-                spectral_norm = S[0]  # Largest singular value (spectral norm)
-                L2_product *= spectral_norm
-        return max(L2_product-global_lip_upper, 0)
+    # def global_lipschitz_loss(self, global_lip_upper=3):
+    #     L2_product = 1
+    #     for param in self.V.parameters():  # Iterate directly over parameters
+    #         if param.ndim > 1:  # Only process weight matrices (ignore biases)
+    #             # Use differentiable SVD
+    #             U, S, V = torch.linalg.svd(param, full_matrices=False)
+    #             spectral_norm = S[0]  # Largest singular value (spectral norm)
+    #             L2_product *= spectral_norm
+    #     return max(L2_product-global_lip_upper, 0)
 
-    def global_lipschitz_calculate(self):
-        L2_product = 1.0
-        # Disable gradient tracking for this computation
-        with torch.no_grad():
-            for param in self.V.parameters():
-                # Process weight matrices only (ignore biases)
-                if param.ndim > 1:
-                    U, S, V = torch.linalg.svd(param, full_matrices=False)
-                    # Extract largest singular value as a float
-                    spectral_norm = S[0].item()
-                    L2_product *= spectral_norm
-        return L2_product
+    # def global_lipschitz_calculate(self):
+    #     L2_product = 1.0
+    #     # Disable gradient tracking for this computation
+    #     with torch.no_grad():
+    #         for param in self.V.parameters():
+    #             # Process weight matrices only (ignore biases)
+    #             if param.ndim > 1:
+    #                 U, S, V = torch.linalg.svd(param, full_matrices=False)
+    #                 # Extract largest singular value as a float
+    #                 spectral_norm = S[0].item()
+    #                 L2_product *= spectral_norm
+    #     return L2_product
 
-    def l2_reg_calculate(self):
-        l2_sum = 0.0
-        with torch.no_grad():  # Disable gradients if you don't need them
-            for param in self.V.parameters():
-                # Sum of squared weights
-                l2_sum += torch.sum(param ** 2).item()
-        return l2_sum
+    # def l2_reg_calculate(self):
+    #     l2_sum = 0.0
+    #     with torch.no_grad():  # Disable gradients if you don't need them
+    #         for param in self.V.parameters():
+    #             # Sum of squared weights
+    #             l2_sum += torch.sum(param ** 2).item()
+    #     return l2_sum
     
 
     def training_step(self, batch, batch_idx):
@@ -1723,13 +1746,13 @@ class TrainerRetrain(pl.LightningModule):
         unsafe_mask, unsafe_mask_c = unsafe_mask[ce_flag ==
                                                  0], unsafe_mask[ce_flag == 1]
         torch.set_grad_enabled(True)
-        _, lc = self.compute_lipschitz_constant("global")
+        #_, lc = self.compute_lipschitz_constant("global")
         # safe_term, safe_acc, unsafe_term, unsafe_acc = self.goal_loss(x, goal_mask, nongoal_mask,safe_mask,unsafe_mask)
         init_term = self.init_loss(
             x, x_c, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask, init_mask_c, goal_mask_c, nongoal_mask_c, safe_mask_c, unsafe_mask_c)
         
-        goal_term = self.goal_loss(
-            x, x_c, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask, init_mask_c, goal_mask_c, nongoal_mask_c, safe_mask_c, unsafe_mask_c)
+        # goal_term = self.goal_loss(
+        #     x, x_c, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask, init_mask_c, goal_mask_c, nongoal_mask_c, safe_mask_c, unsafe_mask_c)
         
         descent_term = self.descent_loss(
             x, x_c, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask, init_mask_c, goal_mask_c, nongoal_mask_c, safe_mask_c, unsafe_mask_c, tj_flag[ce_flag == 0].bool())
@@ -1741,16 +1764,16 @@ class TrainerRetrain(pl.LightningModule):
         # lip_term = self.local_lipschitz_loss(x, x_c)
         # l2_reg_term = self.l2_reg_loss()
         total_loss = descent_term + init_term + goal_term + lip_term + l2_reg_term
-        if batch_idx % 100 == 0:
-            lip_term = self.global_lipschitz_calculate()
-            l2_reg_term = self.l2_reg_calculate()
-            print(lip_term, l2_reg_term, init_term, descent_term)
-            print(total_loss)
+        # if batch_idx % 100 == 0:
+        #     lip_term = self.global_lipschitz_calculate()
+        #     l2_reg_term = self.l2_reg_calculate()
+        #     print(lip_term, l2_reg_term, init_term, descent_term)
+        #     print(total_loss)
 
         opt_v, opt_c, opt_a = self.optimizers()
 
         if total_loss > 0:
-            if self.epoch <= 4:  # vallina: 1; lip: 4
+            if self.epoch <= 5:  # vallina: 1; lip: 4
                 opt_v.zero_grad()
                 self.manual_backward(total_loss)
                 opt_v.step()
@@ -1763,7 +1786,7 @@ class TrainerRetrain(pl.LightningModule):
         self.losses_train.append(total_loss)
         self.init_losses_train.append(init_term)
         self.descent_losses_train.append(descent_term)
-        self.goal_losses_train.append(goal_term)
+        # self.goal_losses_train.append(goal_term)
         return batch_dict
 
     def validation_step(self, batch, batch_idx):
@@ -1780,7 +1803,7 @@ class TrainerRetrain(pl.LightningModule):
                                            0], safe_mask[ce_flag == 1]
         unsafe_mask, unsafe_mask_c = unsafe_mask[ce_flag ==
                                                  0], unsafe_mask[ce_flag == 1]
-        _, lc = self.compute_lipschitz_constant("global")
+        # _, lc = self.compute_lipschitz_constant("global")
         init_term = self.init_loss(
             x, x_c, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask, init_mask_c, goal_mask_c, nongoal_mask_c, safe_mask_c, unsafe_mask_c)
         descent_term = self.descent_loss(
@@ -1800,11 +1823,11 @@ class TrainerRetrain(pl.LightningModule):
         descent = 0
         for i in range(len(self.losses_train)):
             total += self.losses_train[i]
-            goal += self.init_losses_train[i]
+            init += self.init_losses_train[i]
             descent += self.descent_losses_train[i]
 
         print("Current loss: ", total/len(self.losses_train))
-        print("Goal loss: ", goal/len(self.losses_train))
+        print("Init loss: ", init/len(self.losses_train))
         print("Descent loss: ", descent/len(self.losses_train))
         print("Total loss:", total)
         # print("Gross: ", gross/len(self.losses_train))
@@ -1844,36 +1867,36 @@ class TrainerRetrain(pl.LightningModule):
         # self.training = self.datamodule.train_dataloader()
         self.train_dataloader()
 
-    def compute_lipschitz_constant(self, type="global", x=None, r=None):
-        """Compute the Lipschitz constant based on your criteria."""
-        if type == "global":
-            L2_product = torch.tensor(1.0)
-            for param in self.V.parameters():  # Iterate directly over parameters
-                # Only process weight matrices (ignore biases)
-                if param.ndim > 1:
-                    # Differentiable SVD
-                    U, S, V = torch.linalg.svd(param, full_matrices=False)
-                    # Largest singular value (spectral norm)
-                    spectral_norm = S[0]
-                    L2_product = L2_product * spectral_norm
-            return "global", L2_product
-        elif type == "local":
-            num_samples = 1000
-            n, d = x.shape
+    # def compute_lipschitz_constant(self, type="global", x=None, r=None):
+    #     """Compute the Lipschitz constant based on your criteria."""
+    #     if type == "global":
+    #         L2_product = torch.tensor(1.0)
+    #         for param in self.V.parameters():  # Iterate directly over parameters
+    #             # Only process weight matrices (ignore biases)
+    #             if param.ndim > 1:
+    #                 # Differentiable SVD
+    #                 U, S, V = torch.linalg.svd(param, full_matrices=False)
+    #                 # Largest singular value (spectral norm)
+    #                 spectral_norm = S[0]
+    #                 L2_product = L2_product * spectral_norm
+    #         return "global", L2_product
+    #     elif type == "local":
+    #         num_samples = 1000
+    #         n, d = x.shape
 
-            noise = torch.empty(n, num_samples, d).uniform_(-1, 1)
-            noise /= torch.amax(torch.abs(noise), dim=-1,
-                                keepdim=True)
-            x_prime = x[:, None, :] + noise * r
-            f_x = self.V(x[:, None, :])
-            f_x_prime = self.V(x_prime)
-            diff = torch.amax(torch.abs(f_x - f_x_prime),
-                              dim=-1)  # (n, num_samples)
-            denom = torch.amax(torch.abs(noise * r), dim=-1)
+    #         noise = torch.empty(n, num_samples, d).uniform_(-1, 1)
+    #         noise /= torch.amax(torch.abs(noise), dim=-1,
+    #                             keepdim=True)
+    #         x_prime = x[:, None, :] + noise * r
+    #         f_x = self.V(x[:, None, :])
+    #         f_x_prime = self.V(x_prime)
+    #         diff = torch.amax(torch.abs(f_x - f_x_prime),
+    #                           dim=-1)  # (n, num_samples)
+    #         denom = torch.amax(torch.abs(noise * r), dim=-1)
 
-            lipschitz_ratios = diff / denom
+    #         lipschitz_ratios = diff / denom
 
-            return "local", lipschitz_ratios
+    #         return "local", lipschitz_ratios
 
     def on_validation_epoch_end(self):
         # generate new data and also plot before (TODO)
@@ -1886,7 +1909,7 @@ class TrainerRetrain(pl.LightningModule):
             descent += self.descent_losses_val[i]
 
         print("Current loss: ", total/len(self.losses_val))
-        print("Goal loss: ", goal/len(self.losses_val))
+        print("Init loss: ", goal/len(self.losses_val))
         print("Descent loss: ", descent/len(self.losses_val))
 
         self.losses_val = []

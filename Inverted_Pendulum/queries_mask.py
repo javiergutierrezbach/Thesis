@@ -15,6 +15,8 @@ from estimate_lip import encodeDifferences
 from convertsinglenetwork import single_model
 #from training_exp_mask import LyapunovNetworkV, TwoDimDocking
 
+from generate_combined_model_torch import combined_model
+
 # from maraboupy import MarabouCore
 class Queries:
 
@@ -64,7 +66,7 @@ class Queries:
         e1 = MarabouUtils.Equation(MarabouCore.Equation.LE)
         e1.addAddend(1.0, init_val)
         e1.addAddend(-1.0, out_val)
-        e1.setScalar(1e-7)
+        e1.setScalar(5e-6)
 
         #force that the cert value decreases
         #network.addEquation(e1)
@@ -647,7 +649,7 @@ class Queries:
 
         d_th_1, d_thdot_1 = encodeDifferences(network, [th_1, thdot_1], [th_d_1, thdot_d_1])
 
-        max_perturbation = 5e-2
+        max_perturbation = 9e-3
 
         network.setUpperBound(d_th_1, max_perturbation)
         network.setUpperBound(d_thdot_1, max_perturbation)
@@ -820,11 +822,11 @@ if __name__ == "__main__":
     pos_limit = 0.7
     safe_pos = 0.3
 
-    cert_file = "models/cert_0_veri.pt"
-    controller_file = "controllers/controller_0_veri.pt"
 
-    comb_file = "combined/combined_0_veri.onnx"
-    model_onnx_file = "models/cert_0_veri.onnx"
+    comb_file = "combined/combined_0_lip7.onnx"
+    model_onnx_file = "models/cert_0_lip7.onnx"
+
+
 
     ret, ret_ranges, failed = safe_descent_cond_check(comb_file, model_onnx_file, safe_pos = safe_pos, limit_pos = pos_limit, docking_pos = 0.2)
 

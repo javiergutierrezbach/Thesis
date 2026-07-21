@@ -16,13 +16,13 @@ if __name__ == "__main__":
 
     is_traj = False
 
-    pos_limit = 1.2
-    safe_pos = 1.0
-    goal_pos = 0.1
+    pos_limit = 0.2
+    safe_pos = 0.1
+    goal_pos = 0.03
 
-    th_limit = 0.6*math.pi
-    safe_th = th_limit - 0.1
-    goal_th = 0.1
+    th_limit = 0.2*math.pi
+    safe_th = 0.10*math.pi
+    goal_th = 0.04*math.pi
 
 
     index = 0
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     dynamic_data_file = f"train_"
     traj_file = f"traj_"
 
-    initial_controller_file = "/Users/javiergutierrez/Documents/Thesis/Thesis_Repo/2D_Quadrotor/init_controller.pth"
+    initial_controller_file = "/Users/javiergutierrez/Documents/Thesis/Thesis_Repo/2D_Quadrotor/controller_initial.pt"
 
     out_controller_folders = "controllers/"
     out_model_folders = "models/"
@@ -83,14 +83,14 @@ if __name__ == "__main__":
 
     st_train_time = datetime.now()
 
-    sample_train_data(cur_dynamic_data_file, dynamic_data_val_file)
+    #sample_train_data(cur_dynamic_data_file, dynamic_data_val_file)
 
     sample_spacing = 0.17
    # sample_grid(cur_dynamic_data_file, sample_spacing)
 
-    train_dynamic(cur_dynamic_data_file, dynamic_file)
+    #train_dynamic(cur_dynamic_data_file, dynamic_file)
 
-    inps, outs, errs = find_top200_error_fast(dynamic_file, cur_dynamic_data_file, "top200/train.pt", k=1000)
+    #inps, outs, errs = find_top200_error_fast(dynamic_file, cur_dynamic_data_file, "top200/train.pt", k=1000)
 
     #finetune_data = append_training_set(cur_dynamic_data_file, "top200/train.pt", 0.1, "dynamic_data/finetune_data.pt")
 
@@ -104,12 +104,13 @@ if __name__ == "__main__":
     # # mse, mae = stat_eval("dynamics/dynamic_finetuned.pt", finetune_data_filename)
     # # print(f"New dynamic full data MSE: {mse:.8f}")
 
+    end_train_time = datetime.now()
+
     mse, mae = stat_eval(dynamic_file, cur_dynamic_data_file)
     print(f"New dynamic training data MSE: {mse:.8f}")
 
     #find_max_error(dynamic_file, cur_dynamic_data_file)
 
-    end_train_time = datetime.now()
 
     diff = end_train_time - st_train_time
     f = open(out_timing_counterexample_file, "a")

@@ -37,9 +37,9 @@ class LyapunovNetworkV(nn.Module):
             nn.Linear(32, 16),
             nn.ReLU(),
             nn.Linear(16, 1)
-        ).double()
+        )
     def forward(self, x):
-        x = x.double()
+
         logits = self.linear_relu_stack(x)
         #logits_goal_mask = self.two_dim_docking.goal_mask(x)
         #logits[logits_goal_mask] = -0.1
@@ -117,11 +117,11 @@ class Controller():
         self.t = t
         
         if (isInitial):
-            self.nn = LearnedController().double().to(self.device)
+            self.nn = LearnedController().to(self.device)
             self.nn.load_state_dict(torch.load(file_name, weights_only=False, map_location=self.device))
         else:
             self.nn = torch.load(file_name, weights_only=False, map_location=self.device)
-            self.nn = self.nn.double()
+            self.nn = self.nn
         #self.nn = self.nn.to(device="cuda")
 
         # checking a more elaborate inductive property holds (closer or velocity decreases in appropriate direction)
@@ -138,7 +138,6 @@ class Controller():
         l = 0.5
         b = 0.1
 
-        states = states.double()
 
         th, thdot = states[:, 0], states[:, 1]
 
@@ -178,10 +177,8 @@ class Dynamic(nn.Module):
             nn.ReLU(),
             nn.Linear(64, 64),
             nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
             nn.Linear(64, 2) # output: next_state
-        ).double()
+        )
         
         self.nn.load_state_dict(torch.load(file_name))
 
@@ -527,7 +524,7 @@ class Trainer(pl.LightningModule):
                 reg_loss = reg_loss + param.norm(2)**2
         return 0.0005*max(reg_loss-l2_reg_upper, 0)
     
-    def global_lipschitz_loss(self, global_lip_upper=3):
+    def global_lipschitz_loss(self, global_lip_upper=5):
         L2_product = 1
         for param in self.V.parameters():  # Iterate directly over parameters
             if param.ndim > 1:  # Only process weight matrices (ignore biases)
@@ -585,9 +582,9 @@ class Trainer(pl.LightningModule):
             x, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask)
 
         l2_reg_term = 0
-        # lip_term = 0
         sl_term = 0
         lip_term = self.global_lipschitz_loss()
+        #lip_term = 0
         # lip_term = self.local_lipschitz_loss(
         #     self.controller.next_step(x[nongoal_mask & safe_mask]))
         # l2_reg_term = self.l2_reg_loss()
@@ -1370,7 +1367,7 @@ class TrainerRetrain(pl.LightningModule):
                 #     self.descenteps + (V_next_c - V_nongoal_c_expanded)/(self.controller.t))
                 #######
 
-                descent_term_c = (100 * descent_violation_c *
+                descent_term_c = self.decreasefactor (descent_violation_c *
                                   condition_original_c).mean()
             descent_term += descent_term_c
 
@@ -1433,7 +1430,7 @@ class TrainerRetrain(pl.LightningModule):
             max_violation += max_violation_c
         return max_violation
 
-    def global_lipschitz_loss(self, global_lip_upper=3):
+    def global_lipschitz_loss(self, global_lip_upper=5):
         L2_product = 1
         for param in self.V.parameters():  # Iterate directly over parameters
             if param.ndim > 1:  # Only process weight matrices (ignore biases)
@@ -1486,8 +1483,9 @@ class TrainerRetrain(pl.LightningModule):
         descent_term = self.descent_loss(
             x, x_c, init_mask, goal_mask, nongoal_mask, safe_mask, unsafe_mask, init_mask_c, goal_mask_c, nongoal_mask_c, safe_mask_c, unsafe_mask_c, tj_flag[ce_flag == 0].bool())
         l2_reg_term = 0
-        # lip_term = 0
+        
         lip_term = self.global_lipschitz_loss()
+        #lip_term = 0
         # lip_term = self.local_lipschitz_loss(x, x_c)
         # l2_reg_term = self.l2_reg_loss()
         total_loss = descent_term + init_term + lip_term + l2_reg_term

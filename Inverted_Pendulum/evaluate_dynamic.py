@@ -276,36 +276,41 @@ if __name__ == "__main__":
     # find_max_error("dynamics/dynamic_finetuned.pt", "dynamic_data/train_0.pt")
 
 
-    lip_bound = get_lip_bound("dynamics/test.pt")
+    lip_bound = get_lip_bound("dynamics/dynamic_0.pt")
     print("lipschitz_upper_bound: ", lip_bound )
 
 
-    inps, outs, (vals, ids) = find_top200_error_fast("dynamics/test.pt", "dynamic_data/train_test.pt", "dynamic_data/finetune_test.pt", 1000)
+    # inps, outs, (vals, ids) = find_top200_error_fast("dynamics/dynamic_0.pt", "dynamic_data/train_0.pt", "dynamic_data/finetune_test.pt", 1)
 
-    for inp, out, val in zip(inps, outs, vals):
-        print(inp.tolist(), out.tolist(), val.item())
+    # for inp, out, val in zip(inps, outs, vals):
+    #     print(inp.tolist(), out.tolist(), val.item())
 
+    print("max error: ", find_max_error("dynamics/dynamic_0.pt", "dynamic_data/train_0.pt"))
+
+    mse, mae = stat_eval("dynamics/dynamic_0.pt", "dynamic_data/train_0.pt")
+    print(mse)
+    print(mae)
     import matplotlib.pyplot as plt
     import numpy as np
 
-    inputs_t = torch.stack(inps, dim=0)      # shape: [50, 3]
-    inputs_np = inputs_t.numpy() 
-    errors_np = np.array(vals)
+    # inputs_t = torch.stack(inps, dim=0)      # shape: [50, 3]
+    # inputs_np = inputs_t.numpy() 
+    # errors_np = np.array(vals)
 
-    theta = inputs_np[:, 0]
-    thetadot = inputs_np[:, 1]
+    # theta = inputs_np[:, 0]
+    # thetadot = inputs_np[:, 1]
 
-    theta = inputs_np[:, 0]
-    thetadot = inputs_np[:, 1]
+    # theta = inputs_np[:, 0]
+    # thetadot = inputs_np[:, 1]
 
-    plt.figure(figsize=(6,5))
-    plt.scatter(theta, thetadot, c=errors_np, cmap='hot', s=60, edgecolor='k')
-    plt.colorbar(label='Error Magnitude')
-    plt.xlabel("theta (rad)")
-    plt.ylabel("theta_dot (rad/s)")
-    plt.title("Worst 50 Errors: θ vs θ̇")
-    plt.grid(True)
-    plt.show()
+    # plt.figure(figsize=(6,5))
+    # plt.scatter(theta, thetadot, c=errors_np, cmap='hot', s=60, edgecolor='k')
+    # plt.colorbar(label='Error Magnitude')
+    # plt.xlabel("theta (rad)")
+    # plt.ylabel("theta_dot (rad/s)")
+    # plt.title("Worst 50 Errors: θ vs θ̇")
+    # plt.grid(True)
+    # plt.show()
 
     #find_max_error("dynamics/.pt", "dynamic_data/train_test.pt")
 

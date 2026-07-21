@@ -13,9 +13,9 @@ from training_exp_mask import SampleData
 def prepare_data(num_points = 1000000, dim = 2, val_split = 0.1, batch_size = 100, max_tries = 500):
         
         x = torch.empty((
-                num_points, dim), dtype=torch.float64).uniform_(-1.0, 1.0)
+                num_points, dim), dtype=torch.float32).uniform_(-1.0, 1.0)
         
-        y = torch.empty((num_points, 1), dtype=torch.float64). uniform_(-1.5, 1.5)
+        y = torch.empty((num_points, 1), dtype=torch.float32). uniform_(-1.5, 1.5)
 
         x = torch.cat((x, y), 1)
         
@@ -25,11 +25,11 @@ def prepare_data(num_points = 1000000, dim = 2, val_split = 0.1, batch_size = 10
         
 
 
-        x = torch.empty((num_points//10, dim), dtype=torch.float64).uniform_(
+        x = torch.empty((num_points//10, dim), dtype=torch.float32).uniform_(
             -1.0, 1.0
         )
 
-        y = torch.empty((num_points//10, 1), dtype=torch.float64).uniform_(
+        y = torch.empty((num_points//10, 1), dtype=torch.float32).uniform_(
             -1.5, 1.5
         )
 
@@ -101,7 +101,7 @@ def sample_grid(out_file, spacing):
                 for vy in np.arange(-vel_limit, vel_limit, spacing):
                     for fx in np.arange(-force_limit, force_limit, spacing):
                         for fy in np.arange(-force_limit, force_limit, spacing):
-                            point = torch.tensor([x, y, vx, vy, fx, fy], dtype=torch.float64)
+                            point = torch.tensor([x, y, vx, vy, fx, fy], dtype=torch.float32)
                             rows.append(point)
 
     x_train = torch.stack(rows)
